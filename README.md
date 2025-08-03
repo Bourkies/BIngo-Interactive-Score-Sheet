@@ -42,7 +42,7 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | Submitted Opacity | 0.1 | Tile status opacity level 0 to 1 |
 | Verified Opacity | 0.1 | Tile status opacity level 0 to 1 |
 | Requires Action Opacity | 0.1 | Tile status opacity level 0 to 1 |
-| Bingo Board Image | *Paste your image link here* | Currently only works with imgur links, gif’s also work. |
+| Bingo Board Image | *Paste your image link here* | Image or GIF link to your bingo board (Currently only works with Imgur links) |
 | Team Names | Team 1, Team 2, Team 3 | Comma separated list of each team name |
 | Team Passwords | pass1, pass2, pass3 | This must be a comma-separated list that corresponds exactly to your Team Names list. |
 | Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field |
