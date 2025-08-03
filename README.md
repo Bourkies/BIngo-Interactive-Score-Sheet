@@ -59,7 +59,9 @@ This sheet defines every tile on your board. A "Points" column is required.
 | A | B | C | D | E | F | G | H | I |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
 | **TileID** | **Name** | **Description** | **Prerequisites** | **Top (%)** | **Left (%)** | **Width (%)** | **Height (%)** | **Points** |
-| A1 | Fire Cape | Obtain a Fire Cape. |  | 10 | 5 | 15 | 15 | 10 |
+| E1 | Example tile 1 | Get x item |  | 10 | 5 | 15 | 15 | 10 |
+| E2 | Example tile 2 | Get x item |  | 25 | 5 | 15 | 15 | 10 |
+| E3 | Example tile 3 | Get x item (E1 must be complete first) | E1 | 40 | 5 | 15 | 15 | 10 |
 
 ### **Step 5: Set Up the 'Submissions' Tab**
 
