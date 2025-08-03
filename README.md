@@ -26,36 +26,31 @@ You need to create three tabs at the bottom of the sheet. Rename them exactly as
 This sheet controls the overall settings for your bingo board. Click on the Config tab and set it up exactly like this.
 
 | A | B |
-| :---- | :---- |
-| **Setting** | **Value** |
-| Page Title | OSRS Bingo |
-| Max Page Width | 1200 |
-| Tile Locked | \#808080 |
-| Tile Unlocked | \#FFFF00 |
-| Tile Partially Complete | \#FFD700 |
-| Tile Submitted | \#00FF00 |
-| Tile Verified | \#0000FF |
-| Tile Requires Action | \#9932CC |
-| Locked Opacity | 0.7 |
-| Unlocked Opacity | 0.7 |
-| Partially Complete Opacity | 0.7 |
-| Submitted Opacity | 0.7 |
-| Verified Opacity | 0.7 |
-| Requires Action Opacity | 0.8 |
-| Bingo Board Image | *Paste your image link here* |
-| Team Names | Team 1, Team 2, Team 3 |
-| Team Passwords | pass1, pass2, pass3 |
-| Evidence Field Label | Proof (Link, Screenshot Name, etc.) |
-| Unlock on Verified Only | TRUE |
-| Show Tile Names | TRUE |
-| Show Scoreboard | TRUE |
-| Load First Team by Default | TRUE |
+| :---- | :---- | :---- |
+| **Setting** | **Value** | **Description** |
+| Page Title | Bingo Board | Page or board title | 
+| Max Page Width | 1200 | Sets the maximum width of the content in pixels (e.g., 1200). The page will still be responsive on smaller screens. |
+| Tile Locked | \#808080 | Hex colour code for tile status |
+| Tile Unlocked | \#FFFF00 | Hex colour code for tile status |
+| Tile Partially Complete | \#FFD700 | Hex colour code for tile status |
+| Tile Submitted | \#00FF00 | Hex colour code for tile status |
+| Tile Verified | \#0000FF | Hex colour code for tile status |
+| Tile Requires Action | \#9932CC | Hex colour code for tile status |
+| Locked Opacity | 0.1 | Tile status opacity level 0 to 1 |
+| Unlocked Opacity | 0.1 | Tile status opacity level 0 to 1 |
+| Partially Complete Opacity | 0.1 | Tile status opacity level 0 to 1 |
+| Submitted Opacity | 0.1 | Tile status opacity level 0 to 1 |
+| Verified Opacity | 0.1 | Tile status opacity level 0 to 1 |
+| Requires Action Opacity | 0.1 | Tile status opacity level 0 to 1 |
+| Bingo Board Image | *Paste your image link here* | Currently only works with imgur links, gif’s also work. |
+| Team Names | Team 1, Team 2, Team 3 | Comma separated list of each team name |
+| Team Passwords | pass1, pass2, pass3 | This must be a comma-separated list that corresponds exactly to your Team Names list. |
+| Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field |
+| Unlock on Verified Only | FALSE | Sets if tiles are unlocked when prerequisite tile once verified my admin (TRUE) or marked complete by player (FALSE) |
+| Show Tile Names | FALSE | Sets if the tile name is drawn on the box |
+| Show Scoreboard | TRUE | Sets if the score board is displayed |
+| Load First Team by Default | TRUE | Set to TRUE to automatically load the first team's board. Set to FALSE to require users to select a team from the dropdown first. |
 
-**Important Notes:**
-
-* **Max Page Width:** Sets the maximum width of the content in pixels (e.g., 1200). The page will still be responsive on smaller screens.  
-* **Team Passwords:** This must be a comma-separated list that corresponds exactly to your Team Names list.  
-* **Load First Team by Default:** Set to TRUE to automatically load the first team's board. Set to FALSE to require users to select a team from the dropdown first.
 
 ### **Step 4: Populate the 'Tiles' Tab**
 
