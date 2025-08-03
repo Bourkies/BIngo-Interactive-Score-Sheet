@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Basic CSS Reset */
+    :root {
+      --board-bg: #1a1a1a;
+      --text-light: #f0f0f0;
+      --text-dark: #222;
+      --accent-color: #00b8d4;
+      --modal-bg: rgba(20, 20, 20, 0.95);
+      --input-bg: #333;
+      --border-color: #444;
+      --error-bg: #4d2a2a;
+      --error-border: #c0392b;
+      --font-main: 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+    }
+    
+    body {
+      font-family: var(--font-main);
+      background-color: var(--board-bg);
+      color: var(--text-light);
+      margin: 0;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    /* --- Header & Controls --- */
+    .controls {
+      width: 100%;
+      /* max-width is set by JS */
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 500;
+    }
+
+    #team-selector {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      background-color: var(--input-bg);
+      color: var(--text-light);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    /* --- Board --- */
+    #board-container {
+      position: relative;
+      width: 100%;
+      /* max-width is set by JS */
+      background-size: cover;
+      background-position: center;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .tile-overlay {
+      position: absolute;
+      border: 2px solid transparent;
+      box-sizing: border-box;
+      transition: background-color 0.3s ease, border-color 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+      text-shadow: 1px 1px 3px black;
+      font-size: 0.9rem;
+      padding: 4px;
+    }
+
+    .tile-overlay.unlocked, .tile-overlay.submitted, .tile-overlay.partially-complete, .tile-overlay.requires-action {
+      cursor: pointer;
+    }
+
+    .tile-overlay:hover {
+      border-color: var(--accent-color);
+    }
+
+    /* --- Color Key & Scoreboard --- */
+    .info-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+        width: 100%;
+        /* max-width is set by JS */
+    }
+
+    #color-key-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1rem;
+        padding: 1rem;
+        background-color: var(--input-bg);
+        border-radius: 8px;
+        box-sizing: border-box;
+    }
+    .key-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .key-color-box {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+    }
+    
+    #scoreboard-container {
+        display: none; /* Hidden by default, shown by JS */
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 1rem;
+        background-color: var(--input-bg);
+        border-radius: 8px;
+    }
+    #scoreboard-container h2 {
+        margin: 0 0 0.5rem 0;
+        text-align: center;
+        font-weight: 500;
+    }
+    .scoreboard-item {
+        display: grid;
+        grid-template-columns: 30px 1fr 60px;
+        align-items: center;
+        padding: 0.5rem;
+        border-radius: 6px;
+    }
+    .scoreboard-item:nth-child(odd) {
+        background-color: rgba(0,0,0,0.2);
+    }
+    .scoreboard-rank {
+        font-weight: bold;
+    }
+    .scoreboard-score {
+        text-align: right;
+        font-weight: bold;
+    }
+
+
+    /* --- Modal Form --- */
+    #submission-modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--modal-bg);
+      backdrop-filter: blur(5px);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background-color: #2a2a2a;
+      padding: 2rem;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      position: relative;
+    }
+
+    .close-button {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #aaa;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .close-button:hover { color: white; }
+
+    #submission-form h2 { margin-top: 0; }
+    #submission-form h3 { margin: 0.5rem 0; color: var(--accent-color); }
+    #submission-form p { color: #ccc; }
+    #submission-form label { display: block; margin-top: 1rem; }
+    #submission-form input[type="text"], #submission-form input[type="password"], #submission-form textarea {
+      width: 100%;
+      padding: 0.75rem;
+      margin-top: 0.5rem;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-light);
+      box-sizing: border-box;
+    }
+    
+    #submission-form .checkbox-container {
+        display: flex;
+        align-items: center;
+        margin-top: 1.5rem;
+        gap: 0.5rem;
+    }
+    #submission-form input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+    }
+    
+    #submission-form button {
+      width: 100%;
+      padding: 0.75rem;
+      margin-top: 1.5rem;
+      background-color: var(--accent-color);
+      color: var(--text-dark);
+      font-weight: bold;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    #submission-form button:hover { background-color: #00d9f5; }
+    #submission-form button:disabled { background-color: #555; cursor: not-allowed; }
+
+    /* --- Loader & Messages --- */
+    #loader { font-size: 1.2rem; }
+    
+    .error-message {
+        padding: 2rem;
+        background-color: var(--error-bg);
+        border: 2px dashed var(--error-border);
+        border-radius: 8px;
+        text-align: center;
+        width: 80%;
+        word-wrap: break-word;
+        position: absolute;
+        z-index: 1;
+    }
+    
+    #message-box {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #333;
+      color: white;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity 0.5s;
+      pointer-events: none;
+    }
+    #message-box.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <h1 id="page-title">OSRS Bingo</h1>
+    <select id="team-selector" onchange="handleTeamChange()"></select>
+  </div>
+
+  <div id="board-container">
+    <div id="loader">Loading board...</div>
+  </div>
+  
+  <div class="info-container">
+    <div id="color-key-container"></div>
+    <div id="scoreboard-container"></div>
+  </div>
+
+  <div id="submission-modal">
+    <div class="modal-content">
+      <span class="close-button" onclick="closeModal()">&times;</span>
+      <form id="submission-form" onsubmit="handleFormSubmit(event)">
+        <h2 id="modal-tile-name">Tile Name</h2>
+        <h3 id="modal-team-name"></h3>
+        <p id="modal-tile-desc">Tile Description</p>
+        <input type="hidden" id="modal-tile-id">
+
+        <label for="player-name">Player Name(s):</label>
+        <input type="text" id="player-name" required>
+
+        <label for="evidence" id="evidence-label">Evidence:</label>
+        <textarea id="evidence" rows="3" placeholder="Enter proof here..."></textarea>
+        
+        <label for="notes">Notes and Comments:</label>
+        <textarea id="notes" rows="3"></textarea>
+        
+        <div class="checkbox-container">
+            <input type="checkbox" id="mark-as-complete">
+            <label for="mark-as-complete">Mark as complete and ready for review</label>
+        </div>
+        
+        <div class="checkbox-container">
+            <input type="checkbox" id="requires-action">
+            <label for="requires-action">Flag for Admin Action</label>
+        </div>
+        
+        <label for="team-password">Team Password:</label>
+        <input type="text" id="team-password" required>
+
+        <button type="submit" id="submit-button">Save Progress</button>
+      </form>
+    </div>
+  </div>
+  
+  <div id="message-box"></div>
+
+  <script>
+    let boardDataCache = null;
+    let currentTeam = '';
+    const POLLING_INTERVAL = 5000;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchBoardData(null);
+      setInterval(() => fetchBoardData(currentTeam, true), POLLING_INTERVAL);
+    });
+
+    function fetchBoardData(teamName, isPolling = false) {
+      const teamToFetch = teamName === null ? null : (teamName || currentTeam);
+
+      if (isPolling && !teamToFetch) return;
+      if (!isPolling) document.getElementById('loader').style.display = 'block';
+      
+      google.script.run
+        .withSuccessHandler(data => {
+          if (data.error) {
+            showMessage(data.error, true);
+            document.getElementById('loader').style.display = 'none';
+            return;
+          }
+          boardDataCache = data;
+          
+          if (document.getElementById('team-selector').options.length === 0 && data.config.teamNames.length > 0) {
+            populateTeamSelector(data.config.teamNames, data.config.loadFirstTeamByDefault);
+            if (data.config.loadFirstTeamByDefault) {
+                currentTeam = data.config.teamNames[0];
+                document.getElementById('team-selector').value = currentTeam;
+                fetchBoardData(currentTeam);
+                return;
+            }
+          }
+          
+          applyMaxWidth(data.config.maxPageWidth);
+          renderBoard();
+          renderColorKey();
+          renderScoreboard();
+          document.getElementById('evidence-label').textContent = data.config.evidenceLabel;
+          const displayTeam = teamName || currentTeam;
+          if (displayTeam) {
+            document.title = `${data.config.pageTitle} : ${displayTeam}`;
+            document.getElementById('page-title').textContent = `${data.config.pageTitle} : ${displayTeam}`;
+          } else {
+            document.title = data.config.pageTitle;
+            document.getElementById('page-title').textContent = data.config.pageTitle;
+          }
+          document.getElementById('loader').style.display = 'none';
+        })
+        .withFailureHandler(error => {
+          showMessage('Failed to load board data: ' + error.message, true);
+          document.getElementById('loader').style.display = 'none';
+        })
+        .getBoardData(teamToFetch);
+    }
+    
+    function applyMaxWidth(width) {
+        const elements = document.querySelectorAll('.controls, #board-container, .info-container');
+        elements.forEach(el => {
+            el.style.maxWidth = `${width}px`;
+        });
+    }
+
+    function populateTeamSelector(teamNames, loadFirstTeam) {
+      const selector = document.getElementById('team-selector');
+      
+      if (!loadFirstTeam) {
+        const placeholder = document.createElement('option');
+        placeholder.value = "";
+        placeholder.textContent = "Select a Team...";
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        selector.appendChild(placeholder);
+      }
+
+      teamNames.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        selector.appendChild(option);
+      });
+    }
+
+    function handleTeamChange() {
+      const selector = document.getElementById('team-selector');
+      if (selector.value === "") return;
+      currentTeam = selector.value;
+      fetchBoardData(currentTeam);
+    }
+
+    function renderBoard() {
+      if (!boardDataCache) return;
+
+      const container = document.getElementById('board-container');
+      container.innerHTML = '';
+
+      const renderTiles = () => {
+        boardDataCache.tiles.forEach(tile => {
+          const tileDiv = document.createElement('div');
+          const statusClass = tile.status.replace(/\s+/g, '-').toLowerCase();
+          tileDiv.className = `tile-overlay ${statusClass}`;
+          
+          tileDiv.style.top = `${tile.top}%`;
+          tileDiv.style.left = `${tile.left}%`;
+          tileDiv.style.width = `${tile.width}%`;
+          tileDiv.style.height = `${tile.height}%`;
+          
+          const color = boardDataCache.config.colors[tile.status] || '#FFFFFF';
+          const opacity = boardDataCache.config.opacity[tile.status] || 0.7;
+          tileDiv.style.backgroundColor = hexToRgba(color, opacity);
+          
+          const imageFailed = !!boardDataCache.config.imageUrlError || !boardDataCache.config.boardImageUrl;
+          if(boardDataCache.config.showTileNames || imageFailed) {
+            const tileNameSpan = document.createElement('span');
+            tileNameSpan.textContent = tile.name;
+            tileDiv.appendChild(tileNameSpan);
+          }
+
+          if (tile.status !== 'Locked' && tile.status !== 'Verified') {
+            tileDiv.onclick = () => openModal(tile);
+          }
+          container.appendChild(tileDiv);
+        });
+      };
+
+      const imageUrl = boardDataCache.config.boardImageUrl;
+      const imageUrlError = boardDataCache.config.imageUrlError;
+
+      if (imageUrlError) {
+        container.style.aspectRatio = '1 / 1';
+        container.style.backgroundColor = 'var(--board-bg)';
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.innerHTML = `<strong>Configuration Error</strong><br>${imageUrlError}`;
+        container.appendChild(errorDiv);
+        renderTiles();
+        return;
+      }
+      
+      if (!imageUrl) {
+        container.style.aspectRatio = '1 / 1';
+        container.style.backgroundColor = 'var(--board-bg)';
+        renderTiles();
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        container.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+        container.style.backgroundImage = `url('${imageUrl}')`;
+        renderTiles();
+      };
+      img.onerror = () => {
+        container.style.aspectRatio = '1 / 1';
+        container.style.backgroundImage = 'none';
+        container.style.backgroundColor = 'var(--board-bg)';
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.innerHTML = `<strong>Image Failed to Load</strong><br>The link seems correct, but the image could not be loaded. Ensure sharing is 'Anyone with the link' if using Google Drive.`;
+        container.appendChild(errorDiv);
+        renderTiles();
+      };
+      img.src = imageUrl;
+    }
+    
+    function renderColorKey() {
+        if (!boardDataCache) return;
+        const keyContainer = document.getElementById('color-key-container');
+        keyContainer.innerHTML = '';
+        
+        const colors = boardDataCache.config.colors;
+        const opacities = boardDataCache.config.opacity;
+        const keyOrder = ['Locked', 'Unlocked', 'Partially Complete', 'Submitted', 'Verified', 'Requires Action'];
+        
+        keyOrder.forEach(status => {
+            if (colors[status]) {
+                const keyItem = document.createElement('div');
+                keyItem.className = 'key-item';
+                
+                const colorBox = document.createElement('div');
+                colorBox.className = 'key-color-box';
+                colorBox.style.backgroundColor = hexToRgba(colors[status], opacities[status] || 0.7);
+                
+                const keyLabel = document.createElement('span');
+                keyLabel.textContent = status;
+                
+                keyItem.appendChild(colorBox);
+                keyItem.appendChild(keyLabel);
+                keyContainer.appendChild(keyItem);
+            }
+        });
+    }
+
+    function renderScoreboard() {
+        const container = document.getElementById('scoreboard-container');
+        if (!boardDataCache || !boardDataCache.config.showScoreboard) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'flex';
+        container.innerHTML = '<h2>Scoreboard</h2>';
+        
+        boardDataCache.scoreboard.forEach((team, index) => {
+            const item = document.createElement('div');
+            item.className = 'scoreboard-item';
+            
+            const rank = document.createElement('div');
+            rank.className = 'scoreboard-rank';
+            rank.textContent = `${index + 1}.`;
+            
+            const teamName = document.createElement('div');
+            teamName.className = 'scoreboard-team';
+            teamName.textContent = team.team;
+            
+            const score = document.createElement('div');
+            score.className = 'scoreboard-score';
+            score.textContent = team.score;
+            
+            item.appendChild(rank);
+            item.appendChild(teamName);
+            item.appendChild(score);
+            container.appendChild(item);
+        });
+    }
+
+    function openModal(tile) {
+      document.getElementById('submission-form').reset();
+      
+      document.getElementById('modal-tile-id').value = tile.id;
+      document.getElementById('modal-tile-name').textContent = tile.name;
+      document.getElementById('modal-team-name').textContent = `Team: ${currentTeam}`;
+      document.getElementById('modal-tile-desc').textContent = tile.description;
+
+      const existingSubmission = boardDataCache.submissionDetails[tile.id];
+      if (existingSubmission) {
+        document.getElementById('player-name').value = existingSubmission.playerName || '';
+        document.getElementById('evidence').value = existingSubmission.evidence || '';
+        document.getElementById('notes').value = existingSubmission.notes || '';
+        document.getElementById('mark-as-complete').checked = existingSubmission.isComplete;
+        document.getElementById('requires-action').checked = existingSubmission.requiresAction;
+      } else {
+        document.getElementById('mark-as-complete').checked = false;
+        document.getElementById('requires-action').checked = false;
+      }
+
+      document.getElementById('submission-modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      const submitButton = document.getElementById('submit-button');
+      document.getElementById('submission-modal').style.display = 'none';
+      document.getElementById('submission-form').reset();
+      submitButton.disabled = false;
+      submitButton.textContent = 'Save Progress';
+    }
+
+    function handleFormSubmit(event) {
+      event.preventDefault();
+      const submitButton = document.getElementById('submit-button');
+      submitButton.disabled = true;
+      submitButton.textContent = 'Submitting...';
+
+      const submissionData = {
+        tileId: document.getElementById('modal-tile-id').value,
+        playerName: document.getElementById('player-name').value,
+        evidence: document.getElementById('evidence').value,
+        notes: document.getElementById('notes').value,
+        team: currentTeam,
+        password: document.getElementById('team-password').value,
+        isComplete: document.getElementById('mark-as-complete').checked,
+        requiresAction: document.getElementById('requires-action').checked
+      };
+      
+      const onSuccess = (response) => {
+        if (response.success) {
+          showMessage(response.message, false);
+          fetchBoardData(currentTeam);
+          closeModal(); // Only close on success
+        } else {
+          showMessage(response.message, true); // e.g., "Invalid password"
+          // On failure, re-enable the button but keep the modal open
+          submitButton.disabled = false;
+          submitButton.textContent = 'Save Progress';
+        }
+      };
+
+      const onFailure = (error) => {
+        showMessage('Submission failed: ' + error.message, true);
+        // On script error, re-enable the button but keep the modal open
+        submitButton.disabled = false;
+        submitButton.textContent = 'Save Progress';
+      };
+
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .submitOrUpdateTile(submissionData);
+    }
+
+    function showMessage(text, isError = false) {
+      const box = document.getElementById('message-box');
+      box.textContent = text;
+      box.style.backgroundColor = isError ? '#c0392b' : '#27ae60';
+      box.classList.add('show');
+      setTimeout(() => {
+        box.classList.remove('show');
+      }, 4000);
+    }
+    
+    function hexToRgba(hex, alpha) {
+        let r = 0, g = 0, b = 0;
+        if (!hex) return `rgba(255,255,255,${alpha})`; // Default to white if color is missing
+        if (hex.length == 4) {
+            r = "0x" + hex[1] + hex[1];
+            g = "0x" + hex[2] + hex[2];
+            b = "0x" + hex[3] + hex[3];
+        } else if (hex.length == 7) {
+            r = "0x" + hex[1] + hex[2];
+            g = "0x" + hex[3] + hex[4];
+            b = "0x" + hex[5] + hex[6];
+        }
+        return `rgba(${+r},${+g},${+b},${alpha})`;
+    }
+
+  </script>
+</body>
+</html>
