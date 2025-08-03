@@ -25,7 +25,7 @@ You need to create three tabs at the bottom of the sheet. Rename them exactly as
 
 This sheet controls the overall settings for your bingo board. Click on the Config tab and set it up exactly like this.
 
-| A | B |
+| A | B | C |
 | :---- | :---- | :---- |
 | **Setting** | **Value** | **Description** |
 | Page Title | Bingo Board | Page or board title | 
