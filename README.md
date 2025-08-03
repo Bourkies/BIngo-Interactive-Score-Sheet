@@ -23,13 +23,13 @@ You need to create three tabs at the bottom of the sheet. Rename them exactly as
 
 ### **Step 3: Populate the 'Config' Tab**
 
-This sheet controls the overall settings for your bingo board. Click on the Config tab and set it up exactly like this.
+This sheet controls the overall settings for your bingo board. Click and copy the following table into the sheet then update the settings as desired.
 
 | A | B | C |
 | :---- | :---- | :---- |
 | **Setting** | **Value** | **Description** |
 | Page Title | Bingo Board | Page or board title | 
-| Max Page Width | 1200 | Sets the maximum width of the content in pixels (e.g., 1200). The page will still be responsive on smaller screens. |
+| Max Page Width | 1400 | Sets the maximum width of the content in pixels (e.g., 1200). The page will still be responsive on smaller screens. |
 | Tile Locked | \#808080 | Hex colour code for tile status |
 | Tile Unlocked | \#FFFF00 | Hex colour code for tile status |
 | Tile Partially Complete | \#FFD700 | Hex colour code for tile status |
@@ -54,7 +54,7 @@ This sheet controls the overall settings for your bingo board. Click on the Conf
 
 ### **Step 4: Populate the 'Tiles' Tab**
 
-This sheet defines every tile on your board. A "Points" column is required.
+This sheet defines every tile on your board, copy the following table into the sheet. Its recommended to wait until the web app is running before adding tiles as this will allow you to visually set the location of each tile as you add them.
 
 | A | B | C | D | E | F | G | H | I |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
@@ -65,7 +65,7 @@ This sheet defines every tile on your board. A "Points" column is required.
 
 ### **Step 5: Set Up the 'Submissions' Tab**
 
-This sheet will automatically log all player submissions.
+This sheet will automatically log all player submissions. Admins verify tiles by setting the “Admin Verified” value of a submission to “TRUE”, after which the tile is then scored.
 
 | A | B | C | D | E | F | G | H | I |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
@@ -95,7 +95,7 @@ This script connects your sheet to the web app.
 ## **How to Use**
 
 * **Players**: Open the web app link, select their team, and click on an unlocked tile. They can fill out the form and update their submission as many times as they need for multi-part tasks.  
-* **Admins**: To verify a submission, go to the Submissions tab in the Google Sheet. Review the evidence. If it's valid, **tick the checkbox** in the Admin Verified column.
+* **Admins**: To verify a submission, go to the Submissions tab in the Google Sheet. Review the evidence. If it's valid, set the value in the Admin Verified column to "TRUE". If the tile can not be scored set the RequiresAction column to “FALSE” and add the reasoning to the Notes column
 
 ## **Admin Management**
 
