@@ -28,40 +28,63 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | A | B | C |
 | :---- | :---- | :---- |
 | **Setting** | **Value** | **Description** |
-| Page Title | Bingo Board | Page or board title | 
-| Max Page Width | 1400 | Sets the maximum width of the content in pixels (e.g., 1200). The page will still be responsive on smaller screens. |
-| Tile Locked | \#808080 | Hex colour code for tile status |
-| Tile Unlocked | \#FFFF00 | Hex colour code for tile status |
-| Tile Partially Complete | \#FFD700 | Hex colour code for tile status |
-| Tile Submitted | \#00FF00 | Hex colour code for tile status |
-| Tile Verified | \#0000FF | Hex colour code for tile status |
-| Tile Requires Action | \#9932CC | Hex colour code for tile status |
-| Locked Opacity | 0.1 | Tile status opacity level 0 to 1 |
-| Unlocked Opacity | 0.1 | Tile status opacity level 0 to 1 |
-| Partially Complete Opacity | 0.1 | Tile status opacity level 0 to 1 |
-| Submitted Opacity | 0.1 | Tile status opacity level 0 to 1 |
-| Verified Opacity | 0.1 | Tile status opacity level 0 to 1 |
-| Requires Action Opacity | 0.1 | Tile status opacity level 0 to 1 |
-| Bingo Board Image | *Paste your image link here* | Image or GIF link to your bingo board (Currently only works with Imgur links) |
-| Team Names | Team 1, Team 2, Team 3 | Comma separated list of each team name |
-| Team Passwords | pass1, pass2, pass3 | This must be a comma-separated list that corresponds exactly to your Team Names list. |
-| Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field |
-| Unlock on Verified Only | FALSE | Sets if tiles are unlocked when prerequisite tile once verified my admin (TRUE) or marked complete by player (FALSE) |
-| Show Tile Names | FALSE | Sets if the tile name is drawn on the box |
-| Show Scoreboard | TRUE | Sets if the score board is displayed |
-| Load First Team by Default | TRUE | Set to TRUE to automatically load the first team's board. Set to FALSE to require users to select a team from the dropdown first. |
+| **General Settings** |  |  |
+| Page Title | Bingo Board | Page or board title. |
+| Admin Password | your\_secret\_password | A password to access the new Admin Verification page. |
+| Max Page Width | 1400 | Sets the maximum width of the content in pixels (e.g., 1200). |
+| Team Names | Team 1, Team 2, Team 3 | Comma-separated list of each team name. |
+| Team Passwords | pass1, pass2, pass3 | Comma-separated list that corresponds exactly to your Team Names list. |
+| Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field in the submission form. |
+| Unlock on Verified Only | FALSE | Sets if tiles are unlocked only after a prerequisite tile is verified by an admin (TRUE), or as soon as it's marked complete by a player (FALSE). |
+| Show Tile Names | FALSE | Sets if the tile name is drawn on the box. |
+| Show Scoreboard | TRUE | Sets if the scoreboard is displayed. |
+| Load First Team by Default | TRUE | Set to TRUE to automatically load the first team's board. Set to FALSE to require users to select a team first. |
+| Bingo Board Image | *Paste your image link here* | Image or GIF link to your bingo board (Supports direct links, Imgur, and Google Drive links). |
+| **Tile Status Colors** |  |  |
+| Tile Locked | \#808080 | Hex colour code for the tile status. |
+| Tile Unlocked | \#FFFF00 | Hex colour code for the tile status. |
+| Tile Partially Complete | \#FFD700 | Hex colour code for the tile status. |
+| Tile Submitted | \#00FF00 | Hex colour code for the tile status. |
+| Tile Verified | \#0000FF | Hex colour code for the tile status. |
+| Tile Requires Action | \#9932CC | Hex colour code for the tile status. |
+| **Tile Status Opacity** |  |  |
+| Locked Opacity | 0.1 | Tile status opacity level from 0 (transparent) to 1 (opaque). |
+| Unlocked Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
+| Partially Complete Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
+| Submitted Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
+| Verified Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
+| Requires Action Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
+| **Default Tile Styling** |  |  |
+| Default Tile Shape | Square | Default shape for all tiles. Options: Square, Circle, Diamond, Triangle, Hexagon. |
+| Default Tile Border Width | 2px | Default border thickness for tiles (e.g., 2px, 0.5rem). |
+| Default Tile Border Color | transparent | Default border color for tiles (e.g., transparent, \#FFFFFF, blue). |
+| Hover Tile Border Width | 3px | Border thickness when hovering over a tile. |
+| Hover Tile Border Color | \#00b8d4 | Border color when hovering over a tile. |
+| **Stamp Image Settings** |  | **Optional:** Add a "stamp" image on top of tiles based on their status. |
+| Use Stamp by Default (Verified) | FALSE | Master switch (TRUE/FALSE) to show the 'Verified' stamp by default. |
+| Stamp Image (Verified) |  | URL for the stamp image for 'Verified' tiles. |
+| Stamp Scale (Verified) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
+| Stamp Rotation (Verified) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
+| Stamp Position (Verified) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+| ... | ... | ...You can add Stamp settings for any status: (Partially Complete), (Unlocked), etc. |
 
 
 ### **Step 4: Populate the 'Tiles' Tab**
 
 This sheet defines every tile on your board, copy the following table into the sheet. Its recommended to wait until the web app is running before adding tiles as this will allow you to visually set the location of each tile as you add them.
 
-| A | B | C | D | E | F | G | H | I |
-| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
-| **TileID** | **Name** | **Description** | **Prerequisites** | **Top (%)** | **Left (%)** | **Width (%)** | **Height (%)** | **Points** |
-| E1 | Example tile 1 | Get x item |  | 10 | 5 | 15 | 15 | 10 |
-| E2 | Example tile 2 | Get x item |  | 25 | 5 | 15 | 15 | 10 |
-| E3 | Example tile 3 | Get x item (E1 must be complete first) | E1 | 40 | 5 | 15 | 15 | 10 |
+| A | B | C | D | E | F | G | H | I | J | K |
+| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
+| **TileID** | **Name** | **Description** | **Prerequisites** | **Top (%)** | **Left (%)** | **Width (%)** | **Height (%)** | **Points** | **Rotation** | **Overrides (JSON)** |
+| E1 | Tile 1 | Get x item |  | 10 | 5 | 15 | 15 | 10 | 0deg |  |
+| E2 | Tile 2 | Get y item | E1 | 25 | 5 | 15 | 15 | 10 | 15deg | {"Default Tile Shape": "Circle", "Tile Verified": "\#00FF00"} |
+| E3 | Tile 3 | Get z item |  | 40 | 5 | 15 | 15 | 10 | 0deg | {"Use Stamp by Default (Verified)": false} |
+
+* **Rotation:** Sets the rotation of the entire tile. (e.g., 5deg, \-10deg). Defaults to 0deg.  
+* **Overrides (JSON):** A powerful feature to override any setting from the Config sheet for a single tile.  
+  * Must be in valid JSON format: {"key": "value", "key2": "value2"}.  
+  * The key must match a setting name from the Config sheet *exactly* (e.g., "Tile Unlocked", "Use Stamp by Default (Verified)").  
+  * If the JSON is invalid, it will be ignored.
 
 ### **Step 5: Set Up the 'Submissions' Tab**
 
@@ -92,24 +115,29 @@ This script connects your sheet to the web app.
 4. Click **Deploy** and authorize the script if prompted.  
 5. Share the new Web app URL with your players.
 
-## **How to Use**
+## **Part 3: How to Use**
 
-* **Players**: Open the web app link, select their team, and click on an unlocked tile. They can fill out the form and update their submission as many times as they need for multi-part tasks.  
-* **Admins**: To verify a submission, go to the Submissions tab in the Google Sheet. Review the evidence. If it's valid, set the value in the Admin Verified column to "TRUE". If the tile can not be scored set the RequiresAction column to “FALSE” and add the reasoning to the Notes column
+### **Player View**
 
-## **Admin Management**
+* Players open the main Web app URL, select their team, and click on an unlocked tile.  
+* They can fill out the form and update their submission as many times as they need.
 
-Once the board is set up, here are two essential steps for making it easier to manage during an event.
+### **Admin View**
 
-### **Filtering Submissions**
+Admins have two ways to manage submissions:  
+**1\. The New Admin Verification Page (Recommended)**
 
-To easily find submissions that need review, you can add filters to the Submissions sheet. **This will not break the script.**
+1. Take your Web app URL and add ?page=admin to the end of it.  
+   * Example: https://script.google.com/macros/s/..../exec?page=admin  
+2. Enter the Admin Password you set in the Config sheet.  
+3. You will see a list of all submissions. You can filter them by status.  
+4. Click on any row to open an edit modal and update the status checkboxes.
 
-1. Click on the **Submissions** tab.  
-2. Select the entire first row by clicking the row number **"1"** on the far left.  
-3. In the menu, go to **Data \-\> Create a filter**.
+**2\. The Google Sheet (Manual Method)**
 
-You will now see dropdown arrows in each header. You can click the arrow in the Admin Verified column and uncheck "TRUE" to see only the unverified submissions.
+* Go to the Submissions tab in the Google Sheet.  
+* Review the evidence. If it's valid, set the value in the Admin Verified column to TRUE.  
+* If a submission needs changes, set RequiresAction to TRUE and add notes for the player in the Notes column.
 
 ### **Protecting Sheets**
 
