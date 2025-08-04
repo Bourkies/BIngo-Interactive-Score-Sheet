@@ -144,11 +144,38 @@
   <div id="message-box"></div>
 
   <script>
+    console.log('--- HTML SCRIPT LOADED --- Version 8');
     let boardDataCache = null;
     let currentTeam = '';
     let pollingIntervalId = null;
 
     document.addEventListener('DOMContentLoaded', fetchInitialData);
+
+    function startPolling() {
+        console.log('Attempting to start polling...');
+        if (!boardDataCache || !boardDataCache.config || !boardDataCache.config.fullConfig) {
+            console.error('Polling failed: boardDataCache or config is not initialized.');
+            return;
+        }
+
+        console.log('Full config object from server:', boardDataCache.config.fullConfig);
+
+        const pollingRateValue = boardDataCache.config.fullConfig['Polling Rate (ms)'];
+        console.log(`Value of 'Polling Rate (ms)' from config: ${pollingRateValue} (Type: ${typeof pollingRateValue})`);
+
+        const pollingRate = parseInt(pollingRateValue, 10);
+        
+        if (pollingIntervalId) {
+            clearInterval(pollingIntervalId);
+        }
+
+        if (!isNaN(pollingRate) && pollingRate > 0) {
+            console.log(`Successfully parsed rate. Starting polling every ${pollingRate}ms.`);
+            pollingIntervalId = setInterval(pollForUpdates, pollingRate);
+        } else {
+            console.log('Polling is disabled. Check "Polling Rate (ms)" in your Config sheet. It should be a number greater than 0.');
+        }
+    }
 
     function fetchInitialData() {
       document.getElementById('loader').style.display = 'block';
@@ -175,12 +202,7 @@
           document.getElementById('evidence-label').textContent = data.config.evidenceLabel;
           document.getElementById('loader').style.display = 'none';
 
-          // Start polling after initial load
-          const pollingRate = data.config.fullConfig['Polling Rate (ms)'];
-          if (pollingIntervalId) clearInterval(pollingIntervalId); // Clear old interval if it exists
-          if (pollingRate > 0) {
-            pollingIntervalId = setInterval(pollForUpdates, pollingRate);
-          }
+          startPolling();
         })
         .withFailureHandler(error => {
           showMessage('Failed to load board data: ' + error.message, true);
@@ -190,18 +212,22 @@
     }
 
     function pollForUpdates() {
+      console.log('Polling for updates at ' + new Date().toLocaleTimeString());
       google.script.run
         .withSuccessHandler(updateData => {
           if (updateData && !updateData.error) {
-            // Silently update the cache with the new data
+            console.log('Poll successful. Updating UI.');
             boardDataCache.teamData = updateData.teamData;
             boardDataCache.scoreboard = updateData.scoreboard;
-            // Re-render the dynamic parts of the UI
             renderBoard();
             renderScoreboard();
+          } else if (updateData && updateData.error) {
+            console.error('Server returned an error during polling:', updateData.error);
           }
         })
-        // Intentionally no failure handler to avoid spamming errors on silent background refresh
+        .withFailureHandler(error => {
+            console.error('Polling request failed:', error.message);
+        })
         .getLatestTeamData();
     }
     
@@ -231,11 +257,11 @@
       const selector = document.getElementById('team-selector');
       if (selector.value === "") return;
       currentTeam = selector.value;
-      renderBoard(); // Re-render with cached data instantly
+      renderBoard();
     }
 
     function getTileStatus(tile, teamName) {
-        if (!boardDataCache || !teamName) return 'Locked';
+        if (!boardDataCache || !teamName || !boardDataCache.teamData[teamName]) return 'Locked';
         
         const teamTileStates = boardDataCache.teamData[teamName].tileStates;
         const state = teamTileStates[tile.id] || {};
@@ -421,7 +447,6 @@
       formElements.forEach(el => el.disabled = !isEditable);
       document.getElementById('submit-button').textContent = isEditable ? 'Save Progress' : 'Verified (Locked)';
 
-      // Fetch latest details before showing
       google.script.run
         .withSuccessHandler(details => {
           if (details) {
@@ -460,17 +485,18 @@
         .withSuccessHandler(response => {
           if (response.success) {
             showMessage(response.message, false);
-            // After a successful submission, do a full refetch to get the latest data and restart the polling timer.
-            fetchInitialData(); 
+            pollForUpdates();
             closeModal();
           } else {
             showMessage(response.message, true);
-            submitButton.disabled = false; submitButton.textContent = 'Save Progress';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Save Progress';
           }
         })
         .withFailureHandler(error => {
           showMessage('Submission failed: ' + error.message, true);
-          submitButton.disabled = false; submitButton.textContent = 'Save Progress';
+          submitButton.disabled = false;
+          submitButton.textContent = 'Save Progress';
         })
         .submitOrUpdateTile(submissionData);
     }
@@ -485,7 +511,7 @@
     
     function hexToRgba(colorStr, alpha) {
         if (!colorStr || typeof colorStr !== 'string') {
-            return `rgba(255, 255, 255, ${alpha})`; // Return a default color if input is invalid
+            return `rgba(255, 255, 255, ${alpha})`;
         }
         
         const sColor = colorStr.trim();
@@ -494,8 +520,6 @@
         }
 
         if (!sColor.startsWith('#')) {
-            // This is not a hex color, return it as is but warn.
-            // Opacity cannot be applied to named colors this way.
             console.warn(`Cannot apply alpha to non-hex color "${sColor}".`);
             return sColor;
         }
@@ -512,12 +536,10 @@
             g = parseInt(hex.substring(2, 4), 16);
             b = parseInt(hex.substring(4, 6), 16);
         } else {
-            // Invalid hex length
             return `rgba(255, 255, 255, ${alpha})`;
         }
 
         if (isNaN(r) || isNaN(g) || isNaN(b)) {
-            // Parsing failed
             return `rgba(255, 255, 255, ${alpha})`;
         }
 
