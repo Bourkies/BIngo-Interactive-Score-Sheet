@@ -125,7 +125,7 @@ This script connects your sheet to the web app.
 ### **Admin View**
 
 Admins have two ways to manage submissions:  
-**1\. The New Admin Verification Page (Recommended)**
+**1\. The Admin Verification Page (Recommended)**
 
 1. Take your Web app URL and add ?page=admin to the end of it.  
    * Example: https://script.google.com/macros/s/..../exec?page=admin  
