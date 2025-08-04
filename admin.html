@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Verification</title>
+  <style>
+    :root {
+      --bg-color: #1e1e1e;
+      --surface-color: #2d2d2d;
+      --primary-text: #e0e0e0;
+      --secondary-text: #a0a0a0;
+      --accent-color: #00b8d4;
+      --border-color: #444;
+      --error-color: #e57373;
+      --success-color: #81c784;
+      --font-main: 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+    }
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-color);
+      color: var(--primary-text);
+      margin: 0;
+      padding: 2rem;
+      box-sizing: border-box;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: var(--accent-color);
+    }
+    /* --- Login Form --- */
+    #login-view {
+      max-width: 400px;
+      margin: 4rem auto;
+      padding: 2rem;
+      background-color: var(--surface-color);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    #login-form label { display: block; margin-bottom: 0.5rem; }
+    #login-form input {
+      width: 100%;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      background-color: var(--bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--primary-text);
+      box-sizing: border-box;
+    }
+    #login-form button {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: var(--accent-color);
+      color: #111;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #login-error {
+        color: var(--error-color);
+        margin-top: 1rem;
+        text-align: center;
+        min-height: 1.2em;
+    }
+
+    /* --- Admin View --- */
+    #admin-view { display: none; }
+    .filters {
+        background-color: var(--surface-color);
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+    }
+    .filters label { font-weight: bold; }
+    .filters .status-filter { display: flex; gap: 0.5rem; align-items: center; }
+
+    /* --- Submissions Table --- */
+    .table-wrapper { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+    th {
+      background-color: #3a3a3a;
+      font-weight: bold;
+    }
+    tbody tr {
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    tbody tr:hover {
+      background-color: #4a4a4a;
+    }
+    .status-verified { color: var(--success-color); }
+    .status-submitted { color: #64b5f6; }
+    .status-action { color: #f06292; }
+    .status-partial { color: #ffd54f; }
+
+    /* --- Modal --- */
+    #edit-modal {
+      display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+      width: 100%; height: 100%; background-color: rgba(0,0,0,0.7);
+      backdrop-filter: blur(5px); justify-content: center; align-items: center;
+    }
+    .modal-content {
+      background-color: var(--surface-color); padding: 2rem; border-radius: 12px;
+      width: 90%; max-width: 600px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative;
+    }
+    .close-button {
+      position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem;
+      font-weight: bold; color: #aaa; cursor: pointer; line-height: 1;
+    }
+    .modal-content h2 { margin-top: 0; color: var(--accent-color); }
+    .modal-content p { background-color: var(--bg-color); padding: 0.75rem; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; }
+    .modal-content label { display: block; margin-top: 1rem; font-weight: bold; }
+    .modal-content textarea {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--primary-text);
+        resize: vertical;
+    }
+    .modal-controls { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+    .modal-controls .checkbox-container { display: flex; align-items: center; gap: 0.75rem; }
+    .modal-controls input[type="checkbox"] { width: 1.2rem; height: 1.2rem; }
+    #update-button {
+        padding: 0.75rem; margin-top: 1rem; background-color: var(--success-color);
+        color: #111; font-weight: bold; border: none; border-radius: 8px; cursor: pointer;
+    }
+    #update-button:disabled { background-color: #555; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Login View -->
+    <div id="login-view">
+      <h1>Admin Login</h1>
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <label for="admin-password">Password</label>
+        <input type="password" id="admin-password" required>
+        <button type="submit" id="login-button">Login</button>
+        <p id="login-error"></p>
+      </form>
+    </div>
+
+    <!-- Main Admin View -->
+    <div id="admin-view">
+      <h1>Admin Verification</h1>
+      <div class="filters">
+        <label>Filter by Status:</label>
+        <div class="status-filter">
+          <input type="checkbox" id="filter-submitted" onchange="renderTable()" checked>
+          <label for="filter-submitted">Submitted</label>
+        </div>
+        <div class="status-filter">
+          <input type="checkbox" id="filter-action" onchange="renderTable()" checked>
+          <label for="filter-action">Requires Action</label>
+        </div>
+        <div class="status-filter">
+          <input type="checkbox" id="filter-partial" onchange="renderTable()">
+          <label for="filter-partial">Partially Complete</label>
+        </div>
+        <div class="status-filter">
+          <input type="checkbox" id="filter-verified" onchange="renderTable()">
+          <label for="filter-verified">Verified</label>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table id="submissions-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Team</th>
+              <th>Tile ID</th>
+              <th>Player(s)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Rows will be inserted by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="edit-modal">
+    <div class="modal-content">
+      <span class="close-button" onclick="closeModal()">&times;</span>
+      <h2 id="modal-title">Edit Submission</h2>
+      <p><strong>Player(s):</strong> <span id="modal-player"></span></p>
+      <p><strong>Evidence:</strong><br><span id="modal-evidence"></span></p>
+      
+      <label for="modal-notes-edit">Notes (Editable):</label>
+      <textarea id="modal-notes-edit" rows="4"></textarea>
+
+      <div class="modal-controls">
+        <div class="checkbox-container">
+          <input type="checkbox" id="modal-verified">
+          <label for="modal-verified">Admin Verified</label>
+        </div>
+        <div class="checkbox-container">
+          <input type="checkbox" id="modal-complete">
+          <label for="modal-complete">Is Complete</label>
+        </div>
+        <div class="checkbox-container">
+          <input type="checkbox" id="modal-action">
+          <label for="modal-action">Requires Action</label>
+        </div>
+      </div>
+      <button id="update-button" onclick="handleUpdate()">Update Submission</button>
+    </div>
+  </div>
+
+  <script>
+    let adminPassword = '';
+    let allSubmissions = [];
+    let currentSubmission = null;
+
+    function handleLogin(event) {
+      event.preventDefault();
+      const passwordInput = document.getElementById('admin-password');
+      const loginButton = document.getElementById('login-button');
+      const errorP = document.getElementById('login-error');
+      
+      adminPassword = passwordInput.value;
+      loginButton.disabled = true;
+      loginButton.textContent = 'Verifying...';
+      errorP.textContent = '';
+
+      google.script.run
+        .withSuccessHandler(response => {
+            console.log("Response from server:", response);
+
+            if (response && response.success) {
+                allSubmissions = response.submissions;
+                document.getElementById('login-view').style.display = 'none';
+                document.getElementById('admin-view').style.display = 'block';
+                renderTable();
+            } else {
+                errorP.textContent = (response && response.message) ? response.message : 'Login failed. Check browser console for details.';
+                loginButton.disabled = false;
+                loginButton.textContent = 'Login';
+            }
+        })
+        .withFailureHandler(error => {
+            console.error("Script execution failed:", error);
+            errorP.textContent = 'Error: ' + error.message;
+            loginButton.disabled = false;
+            loginButton.textContent = 'Login';
+        })
+        .getAdminData(adminPassword);
+    }
+
+    function getStatus(sub) {
+        if (sub['Admin Verified']) return { text: 'Verified', class: 'status-verified' };
+        if (sub['RequiresAction']) return { text: 'Requires Action', class: 'status-action' };
+        if (sub['IsComplete']) return { text: 'Submitted', class: 'status-submitted' };
+        return { text: 'Partially Complete', class: 'status-partial' };
+    }
+
+    function renderTable() {
+      const tbody = document.querySelector('#submissions-table tbody');
+      tbody.innerHTML = '';
+
+      const showSubmitted = document.getElementById('filter-submitted').checked;
+      const showAction = document.getElementById('filter-action').checked;
+      const showPartial = document.getElementById('filter-partial').checked;
+      const showVerified = document.getElementById('filter-verified').checked;
+
+      const filteredSubmissions = allSubmissions.filter(sub => {
+        const status = getStatus(sub).text;
+        if (status === 'Submitted' && showSubmitted) return true;
+        if (status === 'Requires Action' && showAction) return true;
+        if (status === 'Partially Complete' && showPartial) return true;
+        if (status === 'Verified' && showVerified) return true;
+        return false;
+      });
+
+      if (filteredSubmissions.length === 0) {
+        const row = tbody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 5;
+        cell.textContent = 'No submissions match the current filters.';
+        cell.style.textAlign = 'center';
+        return;
+      }
+
+      filteredSubmissions.forEach(sub => {
+        const row = tbody.insertRow();
+        row.onclick = () => openModal(sub);
+        
+        const statusInfo = getStatus(sub);
+        row.innerHTML = `
+          <td>${new Date(sub.Timestamp).toLocaleString()}</td>
+          <td>${sub.Team}</td>
+          <td>${sub.TileID}</td>
+          <td>${sub['Player Name']}</td>
+          <td class="${statusInfo.class}">${statusInfo.text}</td>
+        `;
+      });
+    }
+
+    function openModal(sub) {
+      currentSubmission = sub;
+      document.getElementById('modal-title').textContent = `Edit: ${sub.TileID} (${sub.Team})`;
+      document.getElementById('modal-player').textContent = sub['Player Name'];
+      document.getElementById('modal-evidence').textContent = sub.Evidence || '(No evidence provided)';
+      
+      // Populate the new editable textarea for notes
+      document.getElementById('modal-notes-edit').value = sub.Notes || '';
+      
+      document.getElementById('modal-verified').checked = sub['Admin Verified'];
+      document.getElementById('modal-complete').checked = sub['IsComplete'];
+      document.getElementById('modal-action').checked = sub['RequiresAction'];
+      
+      document.getElementById('edit-modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('edit-modal').style.display = 'none';
+      currentSubmission = null;
+    }
+
+    function handleUpdate() {
+      if (!currentSubmission) return;
+      const updateButton = document.getElementById('update-button');
+      updateButton.disabled = true;
+      updateButton.textContent = 'Updating...';
+
+      const updateData = {
+        password: adminPassword,
+        timestamp: new Date(currentSubmission.Timestamp).toISOString(),
+        team: currentSubmission.Team,
+        tileId: currentSubmission.TileID,
+        // Read the value from the new notes textarea
+        notes: document.getElementById('modal-notes-edit').value,
+        adminVerified: document.getElementById('modal-verified').checked,
+        isComplete: document.getElementById('modal-complete').checked,
+        requiresAction: document.getElementById('modal-action').checked
+      };
+
+      google.script.run
+        .withSuccessHandler(response => {
+          updateButton.disabled = false;
+          updateButton.textContent = 'Update Submission';
+          if (response.success) {
+            closeModal();
+            // Re-fetch all data to ensure consistency
+            google.script.run.withSuccessHandler(data => {
+                if (data.success) {
+                    allSubmissions = data.submissions;
+                    renderTable();
+                } else {
+                    alert('Failed to refresh data: ' + data.message);
+                }
+            }).getAdminData(adminPassword);
+          } else {
+            alert('Update failed: ' + response.message);
+          }
+        })
+        .withFailureHandler(error => {
+          alert('Update failed: ' + error.message);
+          updateButton.disabled = false;
+          updateButton.textContent = 'Update Submission';
+        })
+        .updateSubmissionStatus(updateData);
+    }
+  </script>
+</body>
+</html>
