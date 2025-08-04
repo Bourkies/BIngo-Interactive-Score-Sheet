@@ -191,7 +191,7 @@ function getLatestTeamData() {
                                 .map(([team, data]) => ({ team: team, score: data.scores }))
                                 .sort((a, b) => b.score - a.score);
 
-    return { teamData, scoreboard };
+    return { teamData, scoreboard: scoreboardData };
   } catch (e) {
     return { error: e.message };
   }
