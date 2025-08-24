@@ -15,6 +15,37 @@
       margin: 0; padding: 1rem; display: flex; flex-direction: column;
       align-items: center; min-height: 100vh; box-sizing: border-box;
     }
+    .navbar {
+      width: 100%;
+      max-width: 1400px;
+      background-color: var(--input-bg);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-sizing: border-box;
+    }
+    .nav-links a, .nav-actions button {
+      color: var(--text-light);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+      background: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .nav-links a:hover, .nav-actions button:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    .nav-links a.active {
+      background-color: var(--accent-color);
+      color: var(--text-dark);
+      font-weight: bold;
+    }
     .controls {
       width: 100%; margin-bottom: 1rem; display: flex; justify-content: space-between;
       align-items: center; flex-wrap: wrap; gap: 1rem;
@@ -61,10 +92,12 @@
     #submission-modal {
       display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
       background-color: var(--modal-bg); backdrop-filter: blur(5px); justify-content: center; align-items: center;
+      padding: 1rem; box-sizing: border-box;
     }
     .modal-content {
-      background-color: #2a2a2a; padding: 2rem; border-radius: 12px; width: 90%;
+      background-color: #2a2a2a; padding: 2rem; border-radius: 12px; width: 100%;
       max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative;
+      max-height: 95vh; overflow-y: auto;
     }
     .close-button {
       position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem;
@@ -72,7 +105,7 @@
     }
     .close-button:hover { color: white; }
     #submission-form h2 { margin-top: 0; }
-    #submission-form h3 { margin: 0.5rem 0; color: var(--accent-color); }
+    #submission-form h3 { margin: 0.5rem 0 1rem 0; color: var(--accent-color); }
     #submission-form p { color: #ccc; }
     #submission-form label { display: block; margin-top: 1rem; }
     #submission-form input, #submission-form textarea {
@@ -99,9 +132,44 @@
       z-index: 2000; opacity: 0; transition: opacity 0.5s; pointer-events: none;
     }
     #message-box.show { opacity: 1; }
+    /* --- NEW: Tooltip Style --- */
+    #tile-tooltip {
+      display: none;
+      position: fixed;
+      z-index: 1001;
+      background-color: #111;
+      color: #fff;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      max-width: 300px;
+      pointer-events: none;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    #tile-tooltip h4 {
+        margin: 0 0 0.5rem 0;
+        color: var(--accent-color);
+        font-size: 1rem;
+    }
+    #tile-tooltip p {
+        margin: 0;
+        color: #ccc;
+    }
   </style>
 </head>
 <body>
+  <div class="navbar">
+    <div class="nav-links">
+      <a href="<?= ScriptApp.getService().getUrl() ?>" class="active">Player View</a>
+      <a href="<?= ScriptApp.getService().getUrl() ?>?page=admin">Admin View</a>
+    </div>
+    <div class="nav-actions">
+      <!-- UPDATED: Refresh button functionality -->
+      <button onclick="refreshData()">Refresh Data</button>
+    </div>
+  </div>
+
   <div class="controls">
     <h1 id="page-title">OSRS Bingo</h1>
     <select id="team-selector" onchange="handleTeamChange()"></select>
@@ -117,9 +185,10 @@
     <div class="modal-content">
       <span class="close-button" onclick="closeModal()">&times;</span>
       <form id="submission-form" onsubmit="handleFormSubmit(event)">
-        <h2 id="modal-tile-name">Tile Name</h2>
+        <!-- UPDATED: Tile ID and Name format -->
+        <h2 id="modal-tile-name"></h2>
         <h3 id="modal-team-name"></h3>
-        <p id="modal-tile-desc">Tile Description</p>
+        <p id="modal-tile-desc"></p>
         <input type="hidden" id="modal-tile-id">
         <label for="player-name">Player Name(s):</label>
         <input type="text" id="player-name" required>
@@ -142,9 +211,11 @@
     </div>
   </div>
   <div id="message-box"></div>
+  <!-- NEW: Tooltip element -->
+  <div id="tile-tooltip"></div>
 
   <script>
-    console.log('--- HTML SCRIPT LOADED --- Version 8');
+    console.log('--- HTML SCRIPT LOADED --- Version 10');
     let boardDataCache = null;
     let currentTeam = '';
     let pollingIntervalId = null;
@@ -152,29 +223,19 @@
     document.addEventListener('DOMContentLoaded', fetchInitialData);
 
     function startPolling() {
-        console.log('Attempting to start polling...');
-        if (!boardDataCache || !boardDataCache.config || !boardDataCache.config.fullConfig) {
-            console.error('Polling failed: boardDataCache or config is not initialized.');
-            return;
-        }
-
-        console.log('Full config object from server:', boardDataCache.config.fullConfig);
-
+        if (!boardDataCache || !boardDataCache.config || !boardDataCache.config.fullConfig) return;
         const pollingRateValue = boardDataCache.config.fullConfig['Polling Rate (ms)'];
-        console.log(`Value of 'Polling Rate (ms)' from config: ${pollingRateValue} (Type: ${typeof pollingRateValue})`);
-
         const pollingRate = parseInt(pollingRateValue, 10);
-        
-        if (pollingIntervalId) {
-            clearInterval(pollingIntervalId);
-        }
-
+        if (pollingIntervalId) clearInterval(pollingIntervalId);
         if (!isNaN(pollingRate) && pollingRate > 0) {
-            console.log(`Successfully parsed rate. Starting polling every ${pollingRate}ms.`);
             pollingIntervalId = setInterval(pollForUpdates, pollingRate);
-        } else {
-            console.log('Polling is disabled. Check "Polling Rate (ms)" in your Config sheet. It should be a number greater than 0.');
         }
+    }
+
+    // NEW: Function to handle refresh button click
+    function refreshData() {
+      showMessage('Refreshing data...', false);
+      pollForUpdates();
     }
 
     function fetchInitialData() {
@@ -187,21 +248,17 @@
             return;
           }
           boardDataCache = data;
-          
           populateTeamSelector(data.config.teamNames, data.config.loadFirstTeamByDefault);
-          
           if (data.config.loadFirstTeamByDefault) {
             currentTeam = data.config.teamNames[0];
             document.getElementById('team-selector').value = currentTeam;
           }
-          
           applyGlobalStyles(data.config.fullConfig);
           renderBoard();
           renderColorKey();
           renderScoreboard();
           document.getElementById('evidence-label').textContent = data.config.evidenceLabel;
           document.getElementById('loader').style.display = 'none';
-
           startPolling();
         })
         .withFailureHandler(error => {
@@ -212,11 +269,9 @@
     }
 
     function pollForUpdates() {
-      console.log('Polling for updates at ' + new Date().toLocaleTimeString());
       google.script.run
         .withSuccessHandler(updateData => {
           if (updateData && !updateData.error) {
-            console.log('Poll successful. Updating UI.');
             boardDataCache.teamData = updateData.teamData;
             boardDataCache.scoreboard = updateData.scoreboard;
             renderBoard();
@@ -232,7 +287,7 @@
     }
     
     function applyGlobalStyles(config) {
-        const elements = document.querySelectorAll('.controls, #board-container, .info-container');
+        const elements = document.querySelectorAll('.navbar, .controls, #board-container, .info-container');
         const maxWidth = config['Max Page Width'];
         if (maxWidth) elements.forEach(el => el.style.maxWidth = `${maxWidth}px`);
     }
@@ -262,21 +317,17 @@
 
     function getTileStatus(tile, teamName) {
         if (!boardDataCache || !teamName || !boardDataCache.teamData[teamName]) return 'Locked';
-        
         const teamTileStates = boardDataCache.teamData[teamName].tileStates;
         const state = teamTileStates[tile.id] || {};
-
         if (state.verified) return 'Verified';
         if (state.requiresAction) return 'Requires Action';
         if (state.complete) return 'Submitted';
         if (state.hasSubmission) return 'Partially Complete';
-
         const unlockOnVerifiedOnly = boardDataCache.config.unlockOnVerifiedOnly;
         const prereqsMet = tile.prerequisites.every(prereqId => {
             const prereqState = teamTileStates[prereqId] || {};
             return unlockOnVerifiedOnly ? prereqState.verified : (prereqState.verified || prereqState.complete);
         });
-        
         return prereqsMet ? 'Unlocked' : 'Locked';
     }
 
@@ -288,10 +339,11 @@
 
       const container = document.getElementById('board-container');
       container.innerHTML = '';
-      
       const displayTeam = currentTeam;
       document.title = `${boardDataCache.config.pageTitle} : ${displayTeam}`;
       document.getElementById('page-title').textContent = document.title;
+      
+      const tooltip = document.getElementById('tile-tooltip');
 
       const renderTiles = () => {
         boardDataCache.tiles.forEach(tile => {
@@ -299,39 +351,40 @@
           const status = getTileStatus(tile, displayTeam);
           const statusClass = status.replace(/\s+/g, '-').toLowerCase();
           tileDiv.className = `tile-overlay ${statusClass}`;
-          
           const config = boardDataCache.config.fullConfig;
           const getProp = (propName) => tile.overrides[propName] !== undefined ? tile.overrides[propName] : config[propName];
-
           tileDiv.style.top = `${tile.top}%`; tileDiv.style.left = `${tile.left}%`;
           tileDiv.style.width = `${tile.width}%`; tileDiv.style.height = `${tile.height}%`;
           tileDiv.style.transform = `rotate(${tile.rotation || '0deg'})`;
-
           const color = getProp(`Tile ${status}`) || '#FFFFFF';
           const opacity = getProp(`${status} Opacity`) || 0.7;
           tileDiv.style.backgroundColor = hexToRgba(color, opacity);
-
           const shape = (getProp('Default Tile Shape') || 'Square').toLowerCase();
-          const clipPaths = {
-              'ellipse': 'ellipse(50% 50% at 50% 50%)', 'circle': 'ellipse(50% 50% at 50% 50%)',
-              'diamond': 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-              'triangle': 'polygon(50% 0%, 0% 100%, 100% 100%)',
-              'hexagon': 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'
-          };
+          const clipPaths = { 'ellipse': 'ellipse(50% 50% at 50% 50%)', 'circle': 'ellipse(50% 50% at 50% 50%)', 'diamond': 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', 'triangle': 'polygon(50% 0%, 0% 100%, 100% 100%)', 'hexagon': 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' };
           if (clipPaths[shape]) tileDiv.style.clipPath = clipPaths[shape];
-
           const borderWidth = getProp('Default Tile Border Width') || '2px';
           const borderColor = getProp('Default Tile Border Color') || 'transparent';
           tileDiv.style.border = `${borderWidth} solid ${borderColor}`;
-
-          tileDiv.onmouseover = () => {
-            const hoverWidth = getProp('Hover Tile Border Width') || '3px';
-            const hoverColor = getProp('Hover Tile Border Color') || 'var(--accent-color)';
-            tileDiv.style.borderColor = hoverColor; tileDiv.style.borderWidth = hoverWidth;
-          };
-          tileDiv.onmouseout = () => {
-            tileDiv.style.borderColor = borderColor; tileDiv.style.borderWidth = borderWidth;
-          };
+          
+          // --- UPDATED: Tooltip logic ---
+          tileDiv.addEventListener('mousemove', (e) => {
+              tooltip.innerHTML = `<h4>${tile.id}: ${tile.name}</h4><p>${tile.description}</p>`;
+              tooltip.style.display = 'block';
+              // Position tooltip relative to cursor
+              tooltip.style.left = `${e.clientX + 15}px`;
+              tooltip.style.top = `${e.clientY + 15}px`;
+          });
+          tileDiv.addEventListener('mouseout', () => {
+              tooltip.style.display = 'none';
+              tileDiv.style.borderColor = borderColor;
+              tileDiv.style.borderWidth = borderWidth;
+          });
+          tileDiv.addEventListener('mouseover', () => {
+              const hoverWidth = getProp('Hover Tile Border Width') || '3px';
+              const hoverColor = getProp('Hover Tile Border Color') || 'var(--accent-color)';
+              tileDiv.style.borderColor = hoverColor;
+              tileDiv.style.borderWidth = hoverWidth;
+          });
 
           const imageFailed = !!boardDataCache.config.imageUrlError || !boardDataCache.config.boardImageUrl;
           if(config['Show Tile Names'] || imageFailed) {
@@ -339,7 +392,6 @@
             tileNameSpan.textContent = tile.name;
             tileDiv.appendChild(tileNameSpan);
           }
-
           const useStamp = getProp(`Use Stamp by Default (${status})`) === true;
           const stampImg = getProp(`Stamp Image (${status})`);
           if (useStamp && stampImg) {
@@ -354,7 +406,6 @@
               stampDiv.style.transform = `scale(${stampScale}) rotate(${stampRotation})`;
               tileDiv.appendChild(stampDiv);
           }
-
           if (status !== 'Locked') {
             tileDiv.onclick = () => openModal(tile, status);
           }
@@ -394,7 +445,6 @@
         keyContainer.innerHTML = '';
         const config = boardDataCache.config.fullConfig;
         const keyOrder = ['Locked', 'Unlocked', 'Partially Complete', 'Submitted', 'Verified', 'Requires Action'];
-        
         keyOrder.forEach(status => {
             const color = config[`Tile ${status}`];
             if (color) {
@@ -419,18 +469,12 @@
             container.style.display = 'none';
             return;
         }
-        
         container.style.display = 'flex';
         container.innerHTML = '<h2>Scoreboard</h2>';
-        
         boardDataCache.scoreboard.forEach((team, index) => {
             const item = document.createElement('div');
             item.className = 'scoreboard-item';
-            item.innerHTML = `
-              <div class="scoreboard-rank">${index + 1}.</div>
-              <div class="scoreboard-team">${team.team}</div>
-              <div class="scoreboard-score">${team.score}</div>
-            `;
+            item.innerHTML = `<div class="scoreboard-rank">${index + 1}.</div><div class="scoreboard-team">${team.team}</div><div class="scoreboard-score">${team.score}</div>`;
             container.appendChild(item);
         });
     }
@@ -438,7 +482,8 @@
     function openModal(tile, status) {
       document.getElementById('submission-form').reset();
       document.getElementById('modal-tile-id').value = tile.id;
-      document.getElementById('modal-tile-name').textContent = tile.name;
+      // --- UPDATED: Set Tile ID and Name in the new format ---
+      document.getElementById('modal-tile-name').textContent = `${tile.id}: ${tile.name}`;
       document.getElementById('modal-team-name').textContent = `Team: ${currentTeam}`;
       document.getElementById('modal-tile-desc').textContent = tile.description;
 
@@ -510,39 +555,18 @@
     }
     
     function hexToRgba(colorStr, alpha) {
-        if (!colorStr || typeof colorStr !== 'string') {
-            return `rgba(255, 255, 255, ${alpha})`;
-        }
-        
+        if (!colorStr || typeof colorStr !== 'string') return `rgba(255, 255, 255, ${alpha})`;
         const sColor = colorStr.trim();
-        if (sColor === 'transparent') {
-            return 'transparent';
-        }
-
-        if (!sColor.startsWith('#')) {
-            console.warn(`Cannot apply alpha to non-hex color "${sColor}".`);
-            return sColor;
-        }
-
+        if (sColor === 'transparent') return 'transparent';
+        if (!sColor.startsWith('#')) return sColor;
         const hex = sColor.slice(1);
         let r = 0, g = 0, b = 0;
-
         if (hex.length === 3) {
-            r = parseInt(hex[0] + hex[0], 16);
-            g = parseInt(hex[1] + hex[1], 16);
-            b = parseInt(hex[2] + hex[2], 16);
+            r = parseInt(hex[0] + hex[0], 16); g = parseInt(hex[1] + hex[1], 16); b = parseInt(hex[2] + hex[2], 16);
         } else if (hex.length === 6) {
-            r = parseInt(hex.substring(0, 2), 16);
-            g = parseInt(hex.substring(2, 4), 16);
-            b = parseInt(hex.substring(4, 6), 16);
-        } else {
-            return `rgba(255, 255, 255, ${alpha})`;
-        }
-
-        if (isNaN(r) || isNaN(g) || isNaN(b)) {
-            return `rgba(255, 255, 255, ${alpha})`;
-        }
-
+            r = parseInt(hex.substring(0, 2), 16); g = parseInt(hex.substring(2, 4), 16); b = parseInt(hex.substring(4, 6), 16);
+        } else { return `rgba(255, 255, 255, ${alpha})`; }
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return `rgba(255, 255, 255, ${alpha})`;
         return `rgba(${r},${g},${b},${alpha})`;
     }
   </script>
