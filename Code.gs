@@ -4,15 +4,13 @@
 
 // Serves the correct HTML page based on the URL parameter.
 function doGet(e) {
+  let template;
   if (e.parameter.page === 'admin') {
-    return HtmlService.createTemplateFromFile('admin')
-      .evaluate()
-      .setTitle('Bingo Admin Verification')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+    template = HtmlService.createTemplateFromFile('admin');
+  } else {
+    template = HtmlService.createTemplateFromFile('index');
   }
-  return HtmlService.createTemplateFromFile('index')
-    .evaluate()
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+  return template.evaluate().setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
 /**
@@ -36,6 +34,7 @@ function parseConfigValue(value) {
  */
 function getFullConfig(spreadsheet) {
     const configSheet = spreadsheet.getSheetByName('Config');
+    if (!configSheet) throw new Error("Sheet 'Config' not found.");
     const configRange = configSheet.getRange('A1:B' + configSheet.getLastRow()).getValues();
     return configRange.reduce((acc, row) => {
         const key = row[0] ? String(row[0]).trim() : '';
@@ -54,6 +53,7 @@ function getBoardData() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const config = getFullConfig(ss);
     const tilesSheet = ss.getSheetByName('Tiles');
+    if (!tilesSheet) return { error: "Sheet 'Tiles' not found." };
     
     // --- Image URL Handling ---
     let finalImageUrl = '';
@@ -70,7 +70,7 @@ function getBoardData() {
     }
     
     // --- Get Tile Definitions ---
-    const tileData = tilesSheet.getRange('A2:K' + tilesSheet.getLastRow()).getValues();
+    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:K' + tilesSheet.getLastRow()).getValues() : [];
     const tiles = tileData.map(row => {
       let overrides = {};
       try {
@@ -84,14 +84,14 @@ function getBoardData() {
         rotation: row[9] || '0deg',
         overrides: overrides
       };
-    });
+    }).filter(t => t.id); // Ensure tile has an ID
     
     const latestData = getLatestTeamData(); // Get initial team data
 
     // --- Prepare Config for Frontend ---
     const frontendConfig = {
       pageTitle: config['Page Title'],
-      teamNames: String(config['Team Names']).split(',').map(t => t.trim()),
+      teamNames: String(config['Team Names'] || '').split(',').map(t => t.trim()),
       evidenceLabel: config['Evidence Field Label'], 
       showScoreboard: config['Show Scoreboard'],
       loadFirstTeamByDefault: config['Load First Team by Default'],
@@ -104,7 +104,7 @@ function getBoardData() {
     return {
       config: frontendConfig,
       tiles: tiles,
-      teamData: latestData.teamData, // Contains statuses and details for all teams
+      teamData: latestData.teamData,
       scoreboard: latestData.scoreboard
     };
 
@@ -124,6 +124,7 @@ function getTileDetails(tileId, teamName) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const submissionsSheet = ss.getSheetByName('Submissions');
+    if (!submissionsSheet) return null;
     const submissions = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange('A2:I' + submissionsSheet.getLastRow()).getValues() : [];
     
     for (let i = submissions.length - 1; i >= 0; i--) {
@@ -148,18 +149,22 @@ function getTileDetails(tileId, teamName) {
 function getLatestTeamData() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const config = getFullConfig(ss); // Needed for team names
+    const config = getFullConfig(ss);
     const tilesSheet = ss.getSheetByName('Tiles');
     const submissionsSheet = ss.getSheetByName('Submissions');
 
-    const tileData = tilesSheet.getRange('A2:I' + tilesSheet.getLastRow()).getValues();
+    if (!tilesSheet || !submissionsSheet) {
+      return { error: "Required sheet not found." };
+    }
+
+    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:I' + tilesSheet.getLastRow()).getValues() : [];
     const tilePointsMap = tileData.reduce((acc, row) => {
-        acc[row[0]] = parseInt(row[8]) || 0;
+        if (row[0]) acc[row[0]] = parseInt(row[8]) || 0;
         return acc;
     }, {});
 
     const submissions = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange('A2:I' + submissionsSheet.getLastRow()).getValues() : [];
-    const teamNamesList = String(config['Team Names']).split(',').map(t => t.trim());
+    const teamNamesList = String(config['Team Names'] || '').split(',').map(t => t.trim());
     const teamData = {};
     teamNamesList.forEach(name => {
       teamData[name] = { scores: 0, tileStates: {}, submissionDetails: {} };
@@ -168,10 +173,12 @@ function getLatestTeamData() {
     submissions.forEach(sub => {
         const team = sub[2];
         const tileId = sub[3];
+        if (!team || !tileId) return; // Skip invalid submission rows
+
         const isVerified = sub[6] === true;
 
         if (teamData[team]) {
-            if (isVerified && tilePointsMap[tileId]) {
+            if (isVerified && tilePointsMap[tileId] && !teamData[team].tileStates[tileId]?.verified) {
                 teamData[team].scores += tilePointsMap[tileId];
             }
             teamData[team].tileStates[tileId] = {
@@ -179,10 +186,6 @@ function getLatestTeamData() {
                 complete: sub[7] === true,
                 requiresAction: sub[8] === true,
                 hasSubmission: true
-            };
-            teamData[team].submissionDetails[tileId] = {
-                playerName: sub[1], evidence: sub[4], notes: sub[5],
-                isComplete: sub[7] === true, requiresAction: sub[8] === true
             };
         }
     });
@@ -215,7 +218,8 @@ function submitOrUpdateTile(submissionData) {
     const submissionsSheet = ss.getSheetByName('Submissions');
     const submissions = submissionsSheet.getDataRange().getValues();
     let rowIndex = -1;
-    for (let i = 1; i < submissions.length; i++) {
+    // Search backwards for the most recent entry
+    for (let i = submissions.length - 1; i >= 1; i--) {
       if (submissions[i][2] === submissionData.team && submissions[i][3] === submissionData.tileId) {
         rowIndex = i + 1;
         break;
@@ -243,16 +247,8 @@ function submitOrUpdateTile(submissionData) {
 function verifyAdminPassword(passwordFromClient) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const configSheet = ss.getSheetByName('Config');
-    const configValues = configSheet.getRange('A1:B' + configSheet.getLastRow()).getValues();
-    let adminPasswordFromSheet;
-
-    for (const row of configValues) {
-      if (row[0] && String(row[0]).trim() === 'Admin Password') {
-        adminPasswordFromSheet = String(row[1]).trim();
-        break;
-      }
-    }
+    const config = getFullConfig(ss);
+    const adminPasswordFromSheet = config['Admin Password'];
     
     if (adminPasswordFromSheet === undefined) return false;
     return (passwordFromClient === adminPasswordFromSheet);
@@ -263,6 +259,7 @@ function verifyAdminPassword(passwordFromClient) {
   }
 }
 
+// UPDATED: This function now also returns tile data
 function getAdminData(password) {
   if (!verifyAdminPassword(password)) {
     return { success: false, message: 'Invalid Admin Password.' };
@@ -271,12 +268,19 @@ function getAdminData(password) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const submissionsSheet = ss.getSheetByName('Submissions');
-    const headers = submissionsSheet.getRange(1, 1, 1, submissionsSheet.getLastColumn()).getValues()[0];
-    const data = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange(2, 1, submissionsSheet.getLastRow() - 1, submissionsSheet.getLastColumn()).getValues() : [];
+    const tilesSheet = ss.getSheetByName('Tiles');
 
-    const submissions = data.map(row => {
+    if (!submissionsSheet || !tilesSheet) {
+      return { success: false, message: "Could not find 'Submissions' or 'Tiles' sheet." };
+    }
+
+    // Get Submissions
+    const subHeaders = submissionsSheet.getRange(1, 1, 1, submissionsSheet.getLastColumn()).getValues()[0];
+    const subData = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange(2, 1, submissionsSheet.getLastRow() - 1, submissionsSheet.getLastColumn()).getValues() : [];
+
+    const submissions = subData.map(row => {
       const submissionObject = {};
-      headers.forEach((header, i) => {
+      subHeaders.forEach((header, i) => {
         if (row[i] instanceof Date) {
           submissionObject[header] = row[i].toISOString();
         } else {
@@ -285,11 +289,26 @@ function getAdminData(password) {
       });
       return submissionObject;
     });
+
+    // NEW: Get Tile data and map it by ID
+    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:C' + tilesSheet.getLastRow()).getValues() : [];
+    const tilesMap = tileData.reduce((acc, row) => {
+      const tileId = row[0];
+      if (tileId) {
+        acc[tileId] = {
+          name: row[1],
+          description: row[2]
+        };
+      }
+      return acc;
+    }, {});
     
-    return { success: true, submissions: submissions.reverse() };
+    // Return both submissions and the new tiles map
+    return { success: true, submissions: submissions.reverse(), tiles: tilesMap };
+
   } catch (error) {
     Logger.log(`Error in getAdminData after password verification: ${error.stack}`);
-    return { success: false, message: 'An error occurred while fetching submission data.' };
+    return { success: false, message: 'An error occurred while fetching data.' };
   }
 }
 
@@ -304,22 +323,26 @@ function updateSubmissionStatus(updateData) {
     const submissions = submissionsSheet.getDataRange().getValues();
     let rowIndex = -1;
 
-    for (let i = 1; i < submissions.length; i++) {
+    // Search backwards to find the exact submission by timestamp, team, and tileId
+    for (let i = submissions.length - 1; i >= 1; i--) {
       const rowTimestamp = new Date(submissions[i][0]).toISOString();
-      if (rowTimestamp === updateData.timestamp) {
+      const rowTeam = submissions[i][2];
+      const rowTileId = submissions[i][3];
+      if (rowTimestamp === updateData.timestamp && rowTeam === updateData.team && rowTileId === updateData.tileId) {
         rowIndex = i + 1;
         break;
       }
     }
 
     if (rowIndex === -1) {
-      return { success: false, message: 'Could not find the submission to update. It may have been modified.' };
+      return { success: false, message: 'Could not find the specific submission to update. It may have been modified.' };
     }
     
-    submissionsSheet.getRange(rowIndex, 6).setValue(updateData.notes);
-    submissionsSheet.getRange(rowIndex, 7).setValue(updateData.adminVerified);
-    submissionsSheet.getRange(rowIndex, 8).setValue(updateData.isComplete);
-    submissionsSheet.getRange(rowIndex, 9).setValue(updateData.requiresAction);
+    // Update the correct columns based on the sheet structure
+    submissionsSheet.getRange(rowIndex, 6).setValue(updateData.notes); // Column F: Notes
+    submissionsSheet.getRange(rowIndex, 7).setValue(updateData.adminVerified); // Column G: Admin Verified
+    submissionsSheet.getRange(rowIndex, 8).setValue(updateData.isComplete); // Column H: IsComplete
+    submissionsSheet.getRange(rowIndex, 9).setValue(updateData.requiresAction); // Column I: RequiresAction
     
     return { success: true, message: 'Submission updated!' };
   } catch (error) {
@@ -333,8 +356,10 @@ function updateSubmissionStatus(updateData) {
 function extractGoogleDriveId(url) {
     if (!url) return null;
     let id = null;
+    // Matches drive.google.com/file/d/FILE_ID/view
     const match1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
     if (match1 && match1[1]) id = match1[1];
+    // Matches drive.google.com/uc?id=FILE_ID
     const match2 = url.match(/drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/);
     if (match2 && match2[1]) id = match2[1];
     return id;
