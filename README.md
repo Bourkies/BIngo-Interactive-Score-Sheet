@@ -30,9 +30,9 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | **Setting** | **Value** | **Description** |
 | **General Settings** |  |  |
 | Page Title | Bingo Board | Page or board title. |
-| Admin Password | your\_secret\_password | A password to access the new Admin Verification page. |
+| Admin Password | your\_secret\_password | Password to access the Admin Verification page. |
 | Max Page Width | 1400 | Sets the maximum width of the content in pixels (e.g., 1200). |
-| Polling Rate (ms) | 5000 | Time in milliseconds to automatically check for updates (e.g., 5000 for 5 seconds). Set to 0 to disable. |
+| Polling Rate (ms) | 5000 | Time in milliseconds to automatically check for updates (e.g., 5000 for 5 seconds). Set to 0 to disable.(broken) |
 | Team Names | Team 1, Team 2, Team 3 | Comma-separated list of each team name. |
 | Team Passwords | pass1, pass2, pass3 | Comma-separated list that corresponds exactly to your Team Names list. |
 | Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field in the submission form. |
@@ -107,6 +107,7 @@ This script connects your sheet to the web app.
 
 1. **Code.gs**: Delete any content inside and copy-paste the code from the Code.gs document provided.  
 2. **index.html**: Delete any content inside and copy-paste the code from the index.html document provided.
+3. **admin.html**: Click the + icon in the "Files" sidebar, select "HTML", name it admin, and copy-paste the code from the admin.html document provided.
 
 ### **Step 3: Save and Deploy**
 
