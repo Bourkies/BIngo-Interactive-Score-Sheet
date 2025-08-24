@@ -23,8 +23,43 @@
       margin: 0;
       padding: 2rem;
       box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .navbar {
+      width: 100%;
+      max-width: 1200px;
+      background-color: var(--surface-color);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-sizing: border-box;
+    }
+    .nav-links a, .nav-actions button {
+      color: var(--primary-text);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+      background: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .nav-links a:hover, .nav-actions button:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    .nav-links a.active {
+      background-color: var(--accent-color);
+      color: #111;
+      font-weight: bold;
     }
     .container {
+      width: 100%;
       max-width: 1200px;
       margin: 0 auto;
     }
@@ -32,7 +67,6 @@
       text-align: center;
       color: var(--accent-color);
     }
-    /* --- Login Form --- */
     #login-view {
       max-width: 400px;
       margin: 4rem auto;
@@ -68,8 +102,6 @@
         text-align: center;
         min-height: 1.2em;
     }
-
-    /* --- Admin View --- */
     #admin-view { display: none; }
     .filters {
         background-color: var(--surface-color);
@@ -83,8 +115,6 @@
     }
     .filters label { font-weight: bold; }
     .filters .status-filter { display: flex; gap: 0.5rem; align-items: center; }
-
-    /* --- Submissions Table --- */
     .table-wrapper { overflow-x: auto; }
     table {
       width: 100%;
@@ -111,34 +141,36 @@
     .status-submitted { color: #64b5f6; }
     .status-action { color: #f06292; }
     .status-partial { color: #ffd54f; }
-
-    /* --- Modal --- */
     #edit-modal {
       display: none; position: fixed; z-index: 1000; left: 0; top: 0;
       width: 100%; height: 100%; background-color: rgba(0,0,0,0.7);
       backdrop-filter: blur(5px); justify-content: center; align-items: center;
+      padding: 1rem; box-sizing: border-box;
     }
     .modal-content {
       background-color: var(--surface-color); padding: 2rem; border-radius: 12px;
-      width: 90%; max-width: 600px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative;
+      width: 100%; max-width: 600px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative;
+      max-height: 95vh; overflow-y: auto;
     }
     .close-button {
       position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem;
       font-weight: bold; color: #aaa; cursor: pointer; line-height: 1;
     }
-    .modal-content h2 { margin-top: 0; color: var(--accent-color); }
-    .modal-content p { background-color: var(--bg-color); padding: 0.75rem; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; }
+    /* --- UPDATED: Modal Header Styles --- */
+    .modal-content h2 { margin-top: 0; color: var(--primary-text); }
+    .modal-content h3 { margin: 0.5rem 0 1rem 0; color: var(--accent-color); font-weight: 500;}
+    .modal-content p#modal-tile-desc { margin-top: 0; color: #ccc; }
+    .modal-section { margin-bottom: 1rem; }
+    .modal-section strong { color: var(--secondary-text); display: block; margin-bottom: 0.25rem; }
+    .modal-section span {
+      background-color: var(--bg-color); padding: 0.75rem; border-radius: 6px;
+      display: block; white-space: pre-wrap; word-wrap: break-word;
+    }
     .modal-content label { display: block; margin-top: 1rem; font-weight: bold; }
     .modal-content textarea {
-        width: 100%;
-        box-sizing: border-box;
-        margin-top: 0.5rem;
-        padding: 0.5rem;
-        background-color: var(--bg-color);
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        color: var(--primary-text);
-        resize: vertical;
+        width: 100%; box-sizing: border-box; margin-top: 0.5rem; padding: 0.5rem;
+        background-color: var(--bg-color); border: 1px solid var(--border-color);
+        border-radius: 6px; color: var(--primary-text); resize: vertical;
     }
     .modal-controls { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
     .modal-controls .checkbox-container { display: flex; align-items: center; gap: 0.75rem; }
@@ -148,23 +180,38 @@
         color: #111; font-weight: bold; border: none; border-radius: 8px; cursor: pointer;
     }
     #update-button:disabled { background-color: #555; cursor: not-allowed; }
+    /* NEW: Message Box Style */
+    #message-box {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background-color: #333; color: white; padding: 1rem 2rem; border-radius: 8px;
+      z-index: 2000; opacity: 0; transition: opacity 0.5s; pointer-events: none;
+    }
+    #message-box.show { opacity: 1; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <!-- Login View -->
-    <div id="login-view">
-      <h1>Admin Login</h1>
-      <form id="login-form" onsubmit="handleLogin(event)">
-        <label for="admin-password">Password</label>
-        <input type="password" id="admin-password" required>
-        <button type="submit" id="login-button">Login</button>
-        <p id="login-error"></p>
-      </form>
-    </div>
+  <div id="login-view" class="container">
+    <h1>Admin Login</h1>
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <label for="admin-password">Password</label>
+      <input type="password" id="admin-password" required>
+      <button type="submit" id="login-button">Login</button>
+      <p id="login-error"></p>
+    </form>
+  </div>
 
-    <!-- Main Admin View -->
-    <div id="admin-view">
+  <div id="admin-view">
+    <div class="navbar">
+      <div class="nav-links">
+        <a href="<?= ScriptApp.getService().getUrl() ?>">Player View</a>
+        <a href="<?= ScriptApp.getService().getUrl() ?>?page=admin" class="active">Admin View</a>
+      </div>
+      <div class="nav-actions">
+        <!-- UPDATED: Refresh button functionality -->
+        <button onclick="refreshAdminData()">Refresh Data</button>
+      </div>
+    </div>
+    <div class="container">
       <h1>Admin Verification</h1>
       <div class="filters">
         <label>Filter by Status:</label>
@@ -192,29 +239,34 @@
               <th>Timestamp</th>
               <th>Team</th>
               <th>Tile ID</th>
+              <th>Tile Name</th>
               <th>Player(s)</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            <!-- Rows will be inserted by JS -->
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Edit Modal -->
   <div id="edit-modal">
     <div class="modal-content">
       <span class="close-button" onclick="closeModal()">&times;</span>
-      <h2 id="modal-title">Edit Submission</h2>
-      <p><strong>Player(s):</strong> <span id="modal-player"></span></p>
-      <p><strong>Evidence:</strong><br><span id="modal-evidence"></span></p>
+      <!-- UPDATED: Modal header layout -->
+      <h2 id="modal-tile-name"></h2>
+      <h3 id="modal-team-name"></h3>
+      <p id="modal-tile-desc"></p>
       
+      <div class="modal-section">
+        <strong>Player(s):</strong> <span id="modal-player"></span>
+      </div>
+      <div class="modal-section">
+        <strong>Evidence:</strong><span id="modal-evidence"></span>
+      </div>
       <label for="modal-notes-edit">Notes (Editable):</label>
       <textarea id="modal-notes-edit" rows="4"></textarea>
-
       <div class="modal-controls">
         <div class="checkbox-container">
           <input type="checkbox" id="modal-verified">
@@ -232,10 +284,13 @@
       <button id="update-button" onclick="handleUpdate()">Update Submission</button>
     </div>
   </div>
+  <!-- NEW: Message box element -->
+  <div id="message-box"></div>
 
   <script>
     let adminPassword = '';
     let allSubmissions = [];
+    let allTiles = {};
     let currentSubmission = null;
 
     function handleLogin(event) {
@@ -243,34 +298,57 @@
       const passwordInput = document.getElementById('admin-password');
       const loginButton = document.getElementById('login-button');
       const errorP = document.getElementById('login-error');
-      
       adminPassword = passwordInput.value;
       loginButton.disabled = true;
       loginButton.textContent = 'Verifying...';
       errorP.textContent = '';
-
       google.script.run
         .withSuccessHandler(response => {
-            console.log("Response from server:", response);
-
             if (response && response.success) {
                 allSubmissions = response.submissions;
+                allTiles = response.tiles; 
                 document.getElementById('login-view').style.display = 'none';
                 document.getElementById('admin-view').style.display = 'block';
                 renderTable();
             } else {
-                errorP.textContent = (response && response.message) ? response.message : 'Login failed. Check browser console for details.';
+                errorP.textContent = (response && response.message) ? response.message : 'Login failed.';
                 loginButton.disabled = false;
                 loginButton.textContent = 'Login';
             }
         })
         .withFailureHandler(error => {
-            console.error("Script execution failed:", error);
             errorP.textContent = 'Error: ' + error.message;
             loginButton.disabled = false;
             loginButton.textContent = 'Login';
         })
         .getAdminData(adminPassword);
+    }
+
+    // NEW: Function to handle refresh button click
+    function refreshAdminData() {
+        const refreshButton = document.querySelector('.nav-actions button');
+        refreshButton.disabled = true;
+        refreshButton.textContent = 'Refreshing...';
+        showMessage('Refreshing data...', false);
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response && response.success) {
+                    allSubmissions = response.submissions;
+                    allTiles = response.tiles;
+                    renderTable();
+                } else {
+                    showMessage((response && response.message) ? 'Refresh failed: ' + response.message : 'Refresh failed.', true);
+                }
+                refreshButton.disabled = false;
+                refreshButton.textContent = 'Refresh Data';
+            })
+            .withFailureHandler(error => {
+                showMessage('Error refreshing data: ' + error.message, true);
+                refreshButton.disabled = false;
+                refreshButton.textContent = 'Refresh Data';
+            })
+            .getAdminData(adminPassword);
     }
 
     function getStatus(sub) {
@@ -283,12 +361,10 @@
     function renderTable() {
       const tbody = document.querySelector('#submissions-table tbody');
       tbody.innerHTML = '';
-
       const showSubmitted = document.getElementById('filter-submitted').checked;
       const showAction = document.getElementById('filter-action').checked;
       const showPartial = document.getElementById('filter-partial').checked;
       const showVerified = document.getElementById('filter-verified').checked;
-
       const filteredSubmissions = allSubmissions.filter(sub => {
         const status = getStatus(sub).text;
         if (status === 'Submitted' && showSubmitted) return true;
@@ -297,44 +373,38 @@
         if (status === 'Verified' && showVerified) return true;
         return false;
       });
-
       if (filteredSubmissions.length === 0) {
         const row = tbody.insertRow();
         const cell = row.insertCell();
-        cell.colSpan = 5;
+        cell.colSpan = 6;
         cell.textContent = 'No submissions match the current filters.';
         cell.style.textAlign = 'center';
         return;
       }
-
       filteredSubmissions.forEach(sub => {
         const row = tbody.insertRow();
         row.onclick = () => openModal(sub);
-        
         const statusInfo = getStatus(sub);
-        row.innerHTML = `
-          <td>${new Date(sub.Timestamp).toLocaleString()}</td>
-          <td>${sub.Team}</td>
-          <td>${sub.TileID}</td>
-          <td>${sub['Player Name']}</td>
-          <td class="${statusInfo.class}">${statusInfo.text}</td>
-        `;
+        const tileName = allTiles[sub.TileID] ? allTiles[sub.TileID].name : 'Unknown Tile';
+        row.innerHTML = `<td>${new Date(sub.Timestamp).toLocaleString()}</td><td>${sub.Team}</td><td>${sub.TileID}</td><td>${tileName}</td><td>${sub['Player Name']}</td><td class="${statusInfo.class}">${statusInfo.text}</td>`;
       });
     }
 
     function openModal(sub) {
       currentSubmission = sub;
-      document.getElementById('modal-title').textContent = `Edit: ${sub.TileID} (${sub.Team})`;
+      const tileInfo = allTiles[sub.TileID] || { name: 'Unknown Tile', description: 'No description found.' };
+      
+      // UPDATED: Populate the new modal header
+      document.getElementById('modal-tile-name').textContent = `${sub.TileID}: ${tileInfo.name}`;
+      document.getElementById('modal-team-name').textContent = `Team: ${sub.Team}`;
+      document.getElementById('modal-tile-desc').textContent = tileInfo.description;
+
       document.getElementById('modal-player').textContent = sub['Player Name'];
       document.getElementById('modal-evidence').textContent = sub.Evidence || '(No evidence provided)';
-      
-      // Populate the new editable textarea for notes
       document.getElementById('modal-notes-edit').value = sub.Notes || '';
-      
       document.getElementById('modal-verified').checked = sub['Admin Verified'];
       document.getElementById('modal-complete').checked = sub['IsComplete'];
       document.getElementById('modal-action').checked = sub['RequiresAction'];
-      
       document.getElementById('edit-modal').style.display = 'flex';
     }
 
@@ -348,44 +418,44 @@
       const updateButton = document.getElementById('update-button');
       updateButton.disabled = true;
       updateButton.textContent = 'Updating...';
-
       const updateData = {
         password: adminPassword,
         timestamp: new Date(currentSubmission.Timestamp).toISOString(),
         team: currentSubmission.Team,
         tileId: currentSubmission.TileID,
-        // Read the value from the new notes textarea
         notes: document.getElementById('modal-notes-edit').value,
         adminVerified: document.getElementById('modal-verified').checked,
         isComplete: document.getElementById('modal-complete').checked,
         requiresAction: document.getElementById('modal-action').checked
       };
-
       google.script.run
         .withSuccessHandler(response => {
           updateButton.disabled = false;
           updateButton.textContent = 'Update Submission';
           if (response.success) {
             closeModal();
-            // Re-fetch all data to ensure consistency
-            google.script.run.withSuccessHandler(data => {
-                if (data.success) {
-                    allSubmissions = data.submissions;
-                    renderTable();
-                } else {
-                    alert('Failed to refresh data: ' + data.message);
-                }
-            }).getAdminData(adminPassword);
+            showMessage('Submission updated successfully!', false);
+            refreshAdminData(); // Refresh data after update
           } else {
-            alert('Update failed: ' + response.message);
+            showMessage('Update failed: ' + response.message, true);
           }
         })
         .withFailureHandler(error => {
-          alert('Update failed: ' + error.message);
+          showMessage('Update failed: ' + error.message, true);
           updateButton.disabled = false;
           updateButton.textContent = 'Update Submission';
         })
         .updateSubmissionStatus(updateData);
+    }
+    
+    // NEW: Message box function
+    function showMessage(text, isError = false) {
+      const box = document.getElementById('message-box');
+      box.textContent = text;
+      box.style.backgroundColor = isError ? 'var(--error-color)' : 'var(--success-color)';
+      box.style.color = '#111'; // Dark text for better contrast
+      box.classList.add('show');
+      setTimeout(() => box.classList.remove('show'), 4000);
     }
   </script>
 </body>
