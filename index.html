@@ -181,6 +181,7 @@
   <div class="navbar">
     <div class="nav-links">
       <a href="<?= ScriptApp.getService().getUrl() ?>" class="active">Player View</a>
+      <a href="<?= ScriptApp.getService().getUrl() ?>?page=overview">Overview</a>
       <a href="<?= ScriptApp.getService().getUrl() ?>?page=admin">Admin View</a>
     </div>
     <div class="nav-actions">
@@ -340,17 +341,21 @@
     }
 
     function renderBoard() {
-      if (!boardDataCache || !currentTeam) {
-        document.getElementById('board-container').innerHTML = '<div id="loader" style="display: block;">Please select a team to view the board.</div>';
+      if (!boardDataCache) {
+        document.getElementById('board-container').innerHTML = '<div id="loader" style="display: block;">Loading board data...</div>';
         return;
       }
 
       const container = document.getElementById('board-container');
       container.innerHTML = '';
       const displayTeam = currentTeam;
-      document.title = `${boardDataCache.config.pageTitle} : ${displayTeam}`;
-      document.getElementById('page-title').textContent = document.title;
       
+      if (displayTeam) {
+        document.title = `${boardDataCache.config.pageTitle} : ${displayTeam}`;
+      } else {
+        document.title = boardDataCache.config.pageTitle;
+      }
+      document.getElementById('page-title').textContent = document.title;
       const tooltip = document.getElementById('tile-tooltip');
 
       const renderTiles = () => {
@@ -414,8 +419,13 @@
               stampDiv.style.transform = `scale(${stampScale}) rotate(${stampRotation})`;
               tileDiv.appendChild(stampDiv);
           }
-          if (status !== 'Locked') {
+          if (displayTeam && status !== 'Locked') {
             tileDiv.onclick = () => openModal(tile, status);
+          } else if (!displayTeam) {
+            // If no team is selected, show a message on click.
+            tileDiv.onclick = () => {
+              showMessage('Please select a team to interact with a tile.', true);
+            };
           }
           container.appendChild(tileDiv);
         });

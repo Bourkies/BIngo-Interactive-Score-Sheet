@@ -89,15 +89,16 @@ This sheet defines every tile on your board, copy the following table into the s
 
 ### **Step 5: Set Up the 'Submissions' Tab**
 
-This sheet will automatically log all player submissions.
+This sheet will automatically log all player submissions. **You must add the `CompletionTimestamp` column for the Overview page chart to work correctly.**
 
+*   **CompletionTimestamp:** Automatically populated when a tile is first marked as "complete". This is used for the time-series chart on the Overview page.
 *   **Evidence Column:** This column stores submission evidence as a JSON string, which allows players to submit multiple pieces of evidence (each with a link and a name) for a single tile. For example: `[{"link":"https://...","name":"First proof"}]`.
 *   **Admin Verification:** Admins verify tiles by setting the “Admin Verified” value of a submission to “TRUE” in the Admin Page or directly in the sheet.
 
 
-| A | B | C | D | E | F | G | H | I |
-| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
-| **Timestamp** | **Player Name** | **Team** | **TileID** | **Evidence** | **Notes** | **Admin Verified** | **IsComplete** | **RequiresAction** |
+| A | B | C | D | E | F | G | H | I | J |
+| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
+| **Timestamp** | **CompletionTimestamp** | **Player Name** | **Team** | **TileID** | **Evidence** | **Notes** | **Admin Verified** | **IsComplete** | **RequiresAction** |
 
 ## **Part 2: Setting Up The Google Apps Script**
 
@@ -110,6 +111,7 @@ This script connects your sheet to the web app.
 ### **Step 2: Create the Script Files**
 
 1. **Code.gs**: Delete any content inside and copy-paste the code from the Code.gs document provided.  
+2. **overview.html**: Click the + icon in the "Files" sidebar, select "HTML", name it `overview`, and copy-paste the code from the `overview.html` document provided.
 2. **index.html**: Delete any content inside and copy-paste the code from the index.html document provided.
 3. **admin.html**: Click the + icon in the "Files" sidebar, select "HTML", name it admin, and copy-paste the code from the admin.html document provided.
 
@@ -123,23 +125,25 @@ This script connects your sheet to the web app.
 
 ## **Part 3: How to Use**
 
+All pages contain a navigation bar at the top to easily switch between the Player, Overview, and Admin views.
+
 ### **Player View**
 
 * Players open the main Web app URL, select their team, and click on an unlocked tile.  
 * They can fill out the form and update their submission as many times as they need.
 
+### **Overview Page**
+
+This page provides a public dashboard for the event, showing a leaderboard, a live feed of recent completions, and a chart of each team's score over time.
+
 ### **Admin View**
 
-Admins have two ways to manage submissions:  
-**1\. The Admin Verification Page (Recommended)**
+This is the recommended way for admins to manage submissions.
+*   Enter the Admin Password you set in the Config sheet.
+*   You will see a list of all submissions. You can filter them by status.
+*   Click on any row to open an edit modal and update the status checkboxes.
 
-1. Take your Web app URL and add ?page=admin to the end of it.  
-   * Example: https://script.google.com/macros/s/..../exec?page=admin  
-2. Enter the Admin Password you set in the Config sheet.  
-3. You will see a list of all submissions. You can filter them by status.  
-4. Click on any row to open an edit modal and update the status checkboxes.
-
-**2\. The Google Sheet (Manual Method)**
+**The Google Sheet (Manual Method)**
 
 * Go to the Submissions tab in the Google Sheet.  
 * Review the evidence. If it's valid, set the value in the Admin Verified column to TRUE.  
