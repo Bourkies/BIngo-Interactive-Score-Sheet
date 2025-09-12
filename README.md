@@ -120,7 +120,10 @@ This script connects your sheet to the web app.
 1. Click the floppy disk icon (💾 Save project).  
 2. At the top right, click **Deploy \-\> New deployment**. This is required for your changes to go live.  
 3. Set **Who has access** to **"Anyone"**.  
-4. Click **Deploy** and authorize the script if prompted.  
+4. Click **Deploy**. You will likely be prompted to **authorize** the script.
+   * **Why is this needed?** Google requires you to grant permission for the script to read from and write to *this specific spreadsheet*. This is how the web app can get tile data and save submissions.
+   * **Is it safe?** Yes. You are only authorizing the code you just pasted to interact with this one sheet. It does not grant access to your entire Google Drive. Other users of the web app will not be able to access your sheet directly.
+   * You may see a screen saying "Google hasn't verified this app". This is normal for personal scripts. Click "Advanced", then "Go to (your project name)".
 5. Share the new Web app URL with your players.
 
 ## **Part 3: How to Use**
