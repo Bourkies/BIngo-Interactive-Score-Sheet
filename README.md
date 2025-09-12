@@ -152,6 +152,18 @@ This is the recommended way for admins to manage submissions.
 * Review the evidence. If it's valid, set the value in the Admin Verified column to TRUE.  
 * If a submission needs changes, set RequiresAction to TRUE and add notes for the player in the Notes column.
 
+### Protecting Sheets
+
+To avoid accidentally breaking the board's configuration, it's highly recommended to protect all sheets.
+
+1. For each sheet 
+2. Click the small down-arrow on the tab itself, and select **Protect sheet**.  
+3. A sidebar will open. You can add a description like "Board Configuration - Do Not Edit".  
+4. Click **Set permissions**.  
+5. Set to "can edit(with warning) **Done**.
+
+Repeat these steps for the **Tiles** sheet. Now, only you (the owner of the spreadsheet) can edit these two critical sheets, but other admins you've shared the sheet with can still view them and manage the Submissions sheet.
+
 ### **Protecting Sheets**
 
 To prevent other admins from accidentally breaking the board's configuration, it's highly recommended to protect the Config and Tiles sheets.
