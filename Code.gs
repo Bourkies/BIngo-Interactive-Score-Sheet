@@ -1,50 +1,64 @@
 /**
  * @OnlyCurrentDoc
- *
- * The above comment directs Apps Script to limit the scope of file authorization
- * to only the current spreadsheet. This is a best practice for security.
  */
 
-// The main function that serves the web app.
+// Serves the correct HTML page based on the URL parameter.
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('index')
-    .evaluate()
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+  let template;
+  if (e.parameter.page === 'admin') {
+    template = HtmlService.createTemplateFromFile('admin');
+  } else {
+    template = HtmlService.createTemplateFromFile('index');
+  }
+  return template.evaluate().setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
 /**
- * Fetches all necessary data from the spreadsheet to build the bingo board.
- * This function is called by the frontend JavaScript.
- * @param {string} teamName The name of the team to get the board state for.
- * @returns {Object} An object containing board configuration, tiles, and their statuses.
+ * Intelligently parses a value from the spreadsheet.
+ * @param {any} value The value from the spreadsheet cell.
+ * @returns {boolean|string} The parsed value.
  */
-function getBoardData(teamName) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const configSheet = ss.getSheetByName('Config');
-    const tilesSheet = ss.getSheetByName('Tiles');
-    const submissionsSheet = ss.getSheetByName('Submissions');
+function parseConfigValue(value) {
+    if (value === null || value === undefined) return '';
+    const sValue = String(value).trim();
+    if (sValue.toLowerCase() === 'true') return true;
+    if (sValue.toLowerCase() === 'false') return false;
+    return sValue;
+}
 
-    // 1. Get Configuration Data robustly by name
+
+/**
+ * Utility to get all config values from the 'Config' sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The active spreadsheet.
+ * @returns {Object} The configuration object.
+ */
+function getFullConfig(spreadsheet) {
+    const configSheet = spreadsheet.getSheetByName('Config');
+    if (!configSheet) throw new Error("Sheet 'Config' not found.");
     const configRange = configSheet.getRange('A1:B' + configSheet.getLastRow()).getValues();
-    const config = configRange.reduce((acc, row) => {
-        const key = row[0] ? row[0].trim() : '';
-        if (key) acc[key] = row[1];
+    return configRange.reduce((acc, row) => {
+        const key = row[0] ? String(row[0]).trim() : '';
+        if (key) acc[key] = parseConfigValue(row[1]);
         return acc;
     }, {});
-    
-    // Validate required config settings
-    const requiredSettings = ['Page Title', 'Tile Locked', 'Tile Unlocked', 'Tile Partially Complete', 'Tile Submitted', 'Tile Verified', 'Tile Requires Action', 'Team Names', 'Team Passwords'];
-    for (const setting of requiredSettings) {
-        if (!config[setting]) {
-            throw new Error(`Configuration Error: Setting "${setting}" is missing or empty in the 'Config' sheet.`);
-        }
-    }
+}
 
+
+/**
+ * Fetches all data required to initialize the bingo board, including statuses for all teams.
+ * This is called only on the initial page load.
+ */
+function getBoardData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = getFullConfig(ss);
+    const tilesSheet = ss.getSheetByName('Tiles');
+    if (!tilesSheet) return { error: "Sheet 'Tiles' not found." };
+    
     // --- Image URL Handling ---
     let finalImageUrl = '';
     let imageUrlError = null;
-    const boardImageLink = String(config['Bingo Board Image'] || '').trim();
+    const boardImageLink = config['Bingo Board Image'] || '';
     if (boardImageLink) {
         if (boardImageLink.includes('google.com')) {
             const fileId = extractGoogleDriveId(boardImageLink);
@@ -54,128 +68,144 @@ function getBoardData(teamName) {
             finalImageUrl = boardImageLink;
         }
     }
-    config.boardImageUrl = finalImageUrl;
-
-    // 2. Get Tile Definitions, including points
-    const tileData = tilesSheet.getRange('A2:I' + tilesSheet.getLastRow()).getValues();
-    const tiles = tileData.map(row => ({
+    
+    // --- Get Tile Definitions ---
+    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:K' + tilesSheet.getLastRow()).getValues() : [];
+    const tiles = tileData.map(row => {
+      let overrides = {};
+      try {
+        if (row[10]) overrides = JSON.parse(row[10]);
+      } catch (e) { /* Ignore invalid JSON */ }
+      return {
         id: row[0], name: row[1], description: row[2],
         prerequisites: row[3] ? String(row[3]).split(',').map(p => p.trim()) : [],
         top: row[4], left: row[5], width: row[6], height: row[7], 
-        points: parseInt(row[8]) || 0, // Add points, default to 0 if not a number
-        status: 'Locked'
-    }));
-    const tilePointsMap = tiles.reduce((acc, tile) => {
-        acc[tile.id] = tile.points;
-        return acc;
-    }, {});
-
-
-    // 3. Get Submissions Data
-    const submissions = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange('A2:I' + submissionsSheet.getLastRow()).getValues() : [];
+        points: parseInt(row[8]) || 0,
+        rotation: row[9] || '0deg',
+        overrides: overrides
+      };
+    }).filter(t => t.id); // Ensure tile has an ID
     
-    // --- Scoreboard Calculation ---
-    const teamScores = {};
-    const teamNamesList = String(config['Team Names']).split(',').map(t => t.trim());
-    teamNamesList.forEach(name => { teamScores[name] = 0; }); // Initialize all teams with 0 points
+    const latestData = getLatestTeamData(); // Get initial team data
 
-    submissions.forEach(sub => {
-        const team = sub[2];
-        const tileId = sub[3];
-        const isVerified = sub[6] === true;
-        if (isVerified && teamScores.hasOwnProperty(team) && tilePointsMap[tileId]) {
-            teamScores[team] += tilePointsMap[tileId];
-        }
-    });
-    const scoreboardData = Object.entries(teamScores)
-                                .map(([team, score]) => ({ team, score }))
-                                .sort((a, b) => b.score - a.score);
-
-
-    // --- Current Team Tile Status Calculation ---
-    const teamSubmissions = teamName && teamName.toLowerCase() !== 'select team' ? submissions.filter(sub => sub[2] === teamName) : [];
-    const tileStates = {};
-    teamSubmissions.forEach(sub => {
-        const tileId = sub[3];
-        tileStates[tileId] = {
-            verified: sub[6] === true, complete: sub[7] === true, requiresAction: sub[8] === true,
-            hasSubmission: true,
-            details: { playerName: sub[1], evidence: sub[4], notes: sub[5], isComplete: sub[7], requiresAction: sub[8] }
-        };
-    });
-
-    const unlockOnVerifiedOnly = config['Unlock on Verified Only'] === true;
-    tiles.forEach(tile => {
-        const state = tileStates[tile.id] || {};
-        if (state.verified) {
-            tile.status = 'Verified';
-        } else if (state.requiresAction) {
-            tile.status = 'Requires Action';
-        } else if (state.complete) {
-            tile.status = 'Submitted';
-        } else if (state.hasSubmission) {
-            tile.status = 'Partially Complete';
-        } else {
-            const prereqsMet = tile.prerequisites.every(prereqId => {
-                const prereqState = tileStates[prereqId] || {};
-                return unlockOnVerifiedOnly ? prereqState.verified : (prereqState.verified || prereqState.complete);
-            });
-            tile.status = prereqsMet ? 'Unlocked' : 'Locked';
-        }
-    });
-    
-    const submissionDetails = {};
-    Object.keys(tileStates).forEach(tileId => {
-        submissionDetails[tileId] = tileStates[tileId].details;
-    });
+    // --- Prepare Config for Frontend ---
+    const frontendConfig = {
+      pageTitle: config['Page Title'],
+      teamNames: String(config['Team Names'] || '').split(',').map(t => t.trim()),
+      evidenceLabel: config['Evidence Field Label'], 
+      showScoreboard: config['Show Scoreboard'],
+      loadFirstTeamByDefault: config['Load First Team by Default'],
+      unlockOnVerifiedOnly: config['Unlock on Verified Only'],
+      boardImageUrl: finalImageUrl,
+      imageUrlError: imageUrlError,
+      fullConfig: config 
+    };
 
     return {
-      config: {
-        pageTitle: config['Page Title'],
-        maxPageWidth: parseInt(config['Max Page Width']) || 900,
-        colors: {
-          'Locked': config['Tile Locked'], 'Unlocked': config['Tile Unlocked'],
-          'Partially Complete': config['Tile Partially Complete'], 'Submitted': config['Tile Submitted'],
-          'Verified': config['Tile Verified'], 'Requires Action': config['Tile Requires Action']
-        },
-        opacity: {
-          'Locked': parseFloat(config['Locked Opacity']) || 0.7, 'Unlocked': parseFloat(config['Unlocked Opacity']) || 0.7,
-          'Partially Complete': parseFloat(config['Partially Complete Opacity']) || 0.7, 'Submitted': parseFloat(config['Submitted Opacity']) || 0.7,
-          'Verified': parseFloat(config['Verified Opacity']) || 0.7, 'Requires Action': parseFloat(config['Requires Action Opacity']) || 0.8,
-        },
-        boardImageUrl: config.boardImageUrl, imageUrlError: imageUrlError,
-        teamNames: teamNamesList,
-        evidenceLabel: config['Evidence Field Label'], 
-        showTileNames: config['Show Tile Names'] === true,
-        showScoreboard: config['Show Scoreboard'] === true,
-        loadFirstTeamByDefault: config['Load First Team by Default'] === true
-      },
-      tiles: tiles, 
-      submissionDetails: submissionDetails,
-      scoreboard: scoreboardData
+      config: frontendConfig,
+      tiles: tiles,
+      teamData: latestData.teamData,
+      scoreboard: latestData.scoreboard
     };
 
   } catch (error) {
-    Logger.log(error);
+    Logger.log(error.stack);
     return { error: 'An error occurred: ' + error.message };
   }
 }
 
 /**
- * Appends or updates a submission, now with password verification.
- * @param {Object} submissionData The data from the form, including password.
- * @returns {Object} A success or error message.
+ * A lightweight function to get the latest submission details for a specific tile.
+ * @param {string} tileId The ID of the tile.
+ * @param {string} teamName The name of the team.
+ * @returns {Object|null} The submission details or null if none exist.
  */
+function getTileDetails(tileId, teamName) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const submissionsSheet = ss.getSheetByName('Submissions');
+    if (!submissionsSheet) return null;
+    const submissions = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange('A2:I' + submissionsSheet.getLastRow()).getValues() : [];
+    
+    for (let i = submissions.length - 1; i >= 0; i--) {
+      const sub = submissions[i];
+      if (sub[3] === tileId && sub[2] === teamName) {
+        return {
+          playerName: sub[1], evidence: sub[4], notes: sub[5],
+          isComplete: sub[7] === true, requiresAction: sub[8] === true
+        };
+      }
+    }
+    return null; // No submission found
+  } catch(e) {
+    return { error: e.message };
+  }
+}
+
+/**
+ * A lightweight function to get updated team data (statuses and scores).
+ * Called by the polling mechanism.
+ */
+function getLatestTeamData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = getFullConfig(ss);
+    const tilesSheet = ss.getSheetByName('Tiles');
+    const submissionsSheet = ss.getSheetByName('Submissions');
+
+    if (!tilesSheet || !submissionsSheet) {
+      return { error: "Required sheet not found." };
+    }
+
+    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:I' + tilesSheet.getLastRow()).getValues() : [];
+    const tilePointsMap = tileData.reduce((acc, row) => {
+        if (row[0]) acc[row[0]] = parseInt(row[8]) || 0;
+        return acc;
+    }, {});
+
+    const submissions = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange('A2:I' + submissionsSheet.getLastRow()).getValues() : [];
+    const teamNamesList = String(config['Team Names'] || '').split(',').map(t => t.trim());
+    const teamData = {};
+    teamNamesList.forEach(name => {
+      teamData[name] = { scores: 0, tileStates: {}, submissionDetails: {} };
+    });
+
+    submissions.forEach(sub => {
+        const team = sub[2];
+        const tileId = sub[3];
+        if (!team || !tileId) return; // Skip invalid submission rows
+
+        const isVerified = sub[6] === true;
+
+        if (teamData[team]) {
+            if (isVerified && tilePointsMap[tileId] && !teamData[team].tileStates[tileId]?.verified) {
+                teamData[team].scores += tilePointsMap[tileId];
+            }
+            teamData[team].tileStates[tileId] = {
+                verified: isVerified,
+                complete: sub[7] === true,
+                requiresAction: sub[8] === true,
+                hasSubmission: true
+            };
+        }
+    });
+
+    const scoreboardData = Object.entries(teamData)
+                                .map(([team, data]) => ({ team: team, score: data.scores }))
+                                .sort((a, b) => b.score - a.score);
+
+    return { teamData, scoreboard: scoreboardData };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+
+// Appends or updates a submission, with password verification.
 function submitOrUpdateTile(submissionData) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const configSheet = ss.getSheetByName('Config');
-    const configRange = configSheet.getRange('A1:B' + configSheet.getLastRow()).getValues();
-    const config = configRange.reduce((acc, row) => {
-        const key = row[0] ? row[0].trim() : '';
-        if (key) acc[key] = row[1];
-        return acc;
-    }, {});
+    const config = getFullConfig(ss);
 
     const teamNames = String(config['Team Names']).split(',').map(t => t.trim());
     const teamPasswords = String(config['Team Passwords']).split(',').map(p => p.trim());
@@ -186,24 +216,17 @@ function submitOrUpdateTile(submissionData) {
     }
 
     const submissionsSheet = ss.getSheetByName('Submissions');
-    if (!submissionData.playerName || !submissionData.team) throw new Error("Missing required fields.");
-
     const submissions = submissionsSheet.getDataRange().getValues();
     let rowIndex = -1;
-    for (let i = 1; i < submissions.length; i++) {
+    // Search backwards for the most recent entry
+    for (let i = submissions.length - 1; i >= 1; i--) {
       if (submissions[i][2] === submissionData.team && submissions[i][3] === submissionData.tileId) {
         rowIndex = i + 1;
         break;
       }
     }
 
-    const rowData = [
-      new Date(), submissionData.playerName, submissionData.team,
-      submissionData.tileId, submissionData.evidence, submissionData.notes,
-      false, // Admin Verified
-      submissionData.isComplete, // IsComplete
-      submissionData.requiresAction // RequiresAction
-    ];
+    const rowData = [ new Date(), submissionData.playerName, submissionData.team, submissionData.tileId, submissionData.evidence, submissionData.notes, false, submissionData.isComplete, submissionData.requiresAction ];
 
     if (rowIndex !== -1) {
       submissionsSheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
@@ -214,16 +237,129 @@ function submitOrUpdateTile(submissionData) {
     }
     
   } catch (error) {
-    Logger.log(error);
+    Logger.log(error.stack);
     return { success: false, message: 'An error occurred: ' + error.message };
   }
 }
 
+// --- ADMIN PAGE FUNCTIONS ---
+
+function verifyAdminPassword(passwordFromClient) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = getFullConfig(ss);
+    const adminPasswordFromSheet = config['Admin Password'];
+    
+    if (adminPasswordFromSheet === undefined) return false;
+    return (passwordFromClient === adminPasswordFromSheet);
+
+  } catch (e) {
+    Logger.log(`[Verification] CRITICAL ERROR during password check: ${e.message}`);
+    return false;
+  }
+}
+
+// UPDATED: This function now also returns tile data
+function getAdminData(password) {
+  if (!verifyAdminPassword(password)) {
+    return { success: false, message: 'Invalid Admin Password.' };
+  }
+  
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const submissionsSheet = ss.getSheetByName('Submissions');
+    const tilesSheet = ss.getSheetByName('Tiles');
+
+    if (!submissionsSheet || !tilesSheet) {
+      return { success: false, message: "Could not find 'Submissions' or 'Tiles' sheet." };
+    }
+
+    // Get Submissions
+    const subHeaders = submissionsSheet.getRange(1, 1, 1, submissionsSheet.getLastColumn()).getValues()[0];
+    const subData = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange(2, 1, submissionsSheet.getLastRow() - 1, submissionsSheet.getLastColumn()).getValues() : [];
+
+    const submissions = subData.map(row => {
+      const submissionObject = {};
+      subHeaders.forEach((header, i) => {
+        if (row[i] instanceof Date) {
+          submissionObject[header] = row[i].toISOString();
+        } else {
+          submissionObject[header] = row[i];
+        }
+      });
+      return submissionObject;
+    });
+
+    // NEW: Get Tile data and map it by ID
+    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:C' + tilesSheet.getLastRow()).getValues() : [];
+    const tilesMap = tileData.reduce((acc, row) => {
+      const tileId = row[0];
+      if (tileId) {
+        acc[tileId] = {
+          name: row[1],
+          description: row[2]
+        };
+      }
+      return acc;
+    }, {});
+    
+    // Return both submissions and the new tiles map
+    return { success: true, submissions: submissions.reverse(), tiles: tilesMap };
+
+  } catch (error) {
+    Logger.log(`Error in getAdminData after password verification: ${error.stack}`);
+    return { success: false, message: 'An error occurred while fetching data.' };
+  }
+}
+
+function updateSubmissionStatus(updateData) {
+   if (!verifyAdminPassword(updateData.password)) {
+      return { success: false, message: 'Invalid Admin Password. Session may have expired.' };
+   }
+
+   try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const submissionsSheet = ss.getSheetByName('Submissions');
+    const submissions = submissionsSheet.getDataRange().getValues();
+    let rowIndex = -1;
+
+    // Search backwards to find the exact submission by timestamp, team, and tileId
+    for (let i = submissions.length - 1; i >= 1; i--) {
+      const rowTimestamp = new Date(submissions[i][0]).toISOString();
+      const rowTeam = submissions[i][2];
+      const rowTileId = submissions[i][3];
+      if (rowTimestamp === updateData.timestamp && rowTeam === updateData.team && rowTileId === updateData.tileId) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      return { success: false, message: 'Could not find the specific submission to update. It may have been modified.' };
+    }
+    
+    // Update the correct columns based on the sheet structure
+    submissionsSheet.getRange(rowIndex, 6).setValue(updateData.notes); // Column F: Notes
+    submissionsSheet.getRange(rowIndex, 7).setValue(updateData.adminVerified); // Column G: Admin Verified
+    submissionsSheet.getRange(rowIndex, 8).setValue(updateData.isComplete); // Column H: IsComplete
+    submissionsSheet.getRange(rowIndex, 9).setValue(updateData.requiresAction); // Column I: RequiresAction
+    
+    return { success: true, message: 'Submission updated!' };
+  } catch (error) {
+    Logger.log(`Error in updateSubmissionStatus after password verification: ${error.stack}`);
+    return { success: false, message: 'An error occurred while updating the submission.' };
+  }
+}
+
+// --- HELPER FUNCTIONS ---
+
 function extractGoogleDriveId(url) {
     if (!url) return null;
     let id = null;
+    // Matches drive.google.com/file/d/FILE_ID/view
     const match1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
     if (match1 && match1[1]) id = match1[1];
+    // Matches drive.google.com/uc?id=FILE_ID
     const match2 = url.match(/drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/);
     if (match2 && match2[1]) id = match2[1];
     return id;
