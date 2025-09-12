@@ -32,11 +32,11 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | Page Title | Bingo Board | Page or board title. |
 | Admin Password | your\_secret\_password | Password to access the Admin Verification page. |
 | Max Page Width | 1400 | Sets the maximum width of the content in pixels (e.g., 1200). |
-| Polling Rate (ms) | 5000 | Time in milliseconds to automatically check for updates (e.g., 5000 for 5 seconds). Set to 0 to disable.(broken) |
 | Team Names | Team 1, Team 2, Team 3 | Comma-separated list of each team name. |
 | Team Passwords | pass1, pass2, pass3 | Comma-separated list that corresponds exactly to your Team Names list. |
 | Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field in the submission form. |
 | Unlock on Verified Only | FALSE | Sets if tiles are unlocked only after a prerequisite tile is verified by an admin (TRUE), or as soon as it's marked complete by a player (FALSE). |
+| Score on Verified Only | FALSE | Sets if points are awarded only after a tile is verified by an admin (TRUE), or as soon as it's marked complete by a player (FALSE). |
 | Show Tile Names | FALSE | Sets if the tile name is drawn on the box. |
 | Show Scoreboard | TRUE | Sets if the scoreboard is displayed. |
 | Load First Team by Default | TRUE | Set to TRUE to automatically load the first team's board. Set to FALSE to require users to select a team first. |
@@ -89,7 +89,11 @@ This sheet defines every tile on your board, copy the following table into the s
 
 ### **Step 5: Set Up the 'Submissions' Tab**
 
-This sheet will automatically log all player submissions. Admins verify tiles by setting the “Admin Verified” value of a submission to “TRUE”, after which the tile is then scored.
+This sheet will automatically log all player submissions.
+
+*   **Evidence Column:** This column stores submission evidence as a JSON string, which allows players to submit multiple pieces of evidence (each with a link and a name) for a single tile. For example: `[{"link":"https://...","name":"First proof"}]`.
+*   **Admin Verification:** Admins verify tiles by setting the “Admin Verified” value of a submission to “TRUE” in the Admin Page or directly in the sheet.
+
 
 | A | B | C | D | E | F | G | H | I |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
