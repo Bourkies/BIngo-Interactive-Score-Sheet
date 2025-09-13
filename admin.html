@@ -163,9 +163,16 @@
     .modal-section { margin-bottom: 1rem; }
     .modal-section strong { color: var(--secondary-text); display: block; margin-bottom: 0.25rem; }
     .modal-section span {
-      background-color: var(--bg-color); padding: 0.75rem; border-radius: 6px;
-      display: block; white-space: pre-wrap; word-wrap: break-word;
+        background-color: var(--bg-color); padding: 0.75rem; border-radius: 6px;
+        display: block; white-space: pre-wrap; word-wrap: break-word;
     }
+    /* --- NEW: Evidence display in admin modal --- */
+    .evidence-display-item { margin-bottom: 0.75rem; }
+    .evidence-display-item:last-child { margin-bottom: 0; }
+    .evidence-display-item strong { color: var(--primary-text); }
+    .evidence-display-item a { color: var(--accent-color); text-decoration: none; word-break: break-all; }
+    .evidence-display-item a:hover { text-decoration: underline; }
+
     .modal-content label { display: block; margin-top: 1rem; font-weight: bold; }
     .modal-content textarea {
         width: 100%; box-sizing: border-box; margin-top: 0.5rem; padding: 0.5rem;
@@ -204,6 +211,7 @@
     <div class="navbar">
       <div class="nav-links">
         <a href="<?= ScriptApp.getService().getUrl() ?>">Player View</a>
+        <a href="<?= ScriptApp.getService().getUrl() ?>?page=overview">Overview</a>
         <a href="<?= ScriptApp.getService().getUrl() ?>?page=admin" class="active">Admin View</a>
       </div>
       <div class="nav-actions">
@@ -263,7 +271,7 @@
         <strong>Player(s):</strong> <span id="modal-player"></span>
       </div>
       <div class="modal-section">
-        <strong>Evidence:</strong><span id="modal-evidence"></span>
+        <strong>Evidence:</strong><div id="modal-evidence"></div>
       </div>
       <label for="modal-notes-edit">Notes (Editable):</label>
       <textarea id="modal-notes-edit" rows="4"></textarea>
@@ -400,7 +408,36 @@
       document.getElementById('modal-tile-desc').textContent = tileInfo.description;
 
       document.getElementById('modal-player').textContent = sub['Player Name'];
-      document.getElementById('modal-evidence').textContent = sub.Evidence || '(No evidence provided)';
+      
+      // --- UPDATED: Render evidence with clickable links ---
+      const evidenceContainer = document.getElementById('modal-evidence');
+      evidenceContainer.innerHTML = ''; // Clear previous
+      const evidenceStr = sub.Evidence || '';
+      let evidenceData = [];
+      try {
+        evidenceData = JSON.parse(evidenceStr);
+        if (!Array.isArray(evidenceData)) throw new Error("Not an array");
+      } catch (e) {
+        // Handle old plain text for backward compatibility
+        if (evidenceStr) evidenceData = [{ link: evidenceStr, name: '' }];
+      }
+
+      if (evidenceData.length > 0 && (evidenceData[0].link || evidenceData[0].name)) {
+        evidenceData.forEach(item => {
+          if (!item.link && !item.name) return; // Skip empty items
+          const itemDiv = document.createElement('div');
+          itemDiv.className = 'evidence-display-item';
+          const namePart = `<strong>${item.name || 'Evidence'}:</strong> `;
+          const linkPart = item.link 
+            ? `<a href="${item.link}" target="_blank" rel="noopener noreferrer">${item.link}</a>` 
+            : '(No link provided)';
+          itemDiv.innerHTML = `${namePart}${linkPart}`;
+          evidenceContainer.appendChild(itemDiv);
+        });
+      } else {
+        evidenceContainer.textContent = '(No evidence provided)';
+      }
+
       document.getElementById('modal-notes-edit').value = sub.Notes || '';
       document.getElementById('modal-verified').checked = sub['Admin Verified'];
       document.getElementById('modal-complete').checked = sub['IsComplete'];

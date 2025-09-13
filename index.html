@@ -79,7 +79,13 @@
       padding: 1rem; background-color: var(--input-bg); border-radius: 8px;
     }
     .key-item { display: flex; align-items: center; gap: 0.5rem; }
-    .key-color-box { width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--border-color); }
+    .key-color-box {
+      width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--border-color);
+      /* For stamp images */
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
     #scoreboard-container {
       display: none; flex-direction: column; gap: 0.5rem; padding: 1rem;
       background-color: var(--input-bg); border-radius: 8px;
@@ -121,6 +127,25 @@
     }
     #submission-form button:hover { background-color: #00d9f5; }
     #submission-form button:disabled { background-color: #555; cursor: not-allowed; }
+    /* --- NEW: Evidence Input Styling --- */
+    #evidence-container { display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem; }
+    .evidence-item {
+        background-color: var(--input-bg); padding: 1rem; border-radius: 8px;
+        border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.75rem;
+    }
+    .evidence-item-header { display: flex; justify-content: space-between; align-items: center; }
+    .evidence-item-header label { margin: 0; font-weight: bold; }
+    .remove-evidence-btn {
+        background: none; border: none; color: #aaa; font-size: 1.2rem;
+        cursor: pointer; padding: 0 0.5rem; line-height: 1;
+    }
+    .remove-evidence-btn:hover { color: var(--error-border); }
+    #add-evidence-btn {
+        width: auto; padding: 0.5rem 1rem; margin-top: 1rem; background-color: transparent;
+        color: var(--accent-color); border: 1px dashed var(--accent-color);
+        font-weight: normal; font-size: 0.9rem;
+    }
+    #add-evidence-btn:hover { background-color: rgba(0, 184, 212, 0.1); }
     #loader { font-size: 1.2rem; }
     .error-message {
         padding: 2rem; background-color: var(--error-bg); border: 2px dashed var(--error-border);
@@ -162,6 +187,7 @@
   <div class="navbar">
     <div class="nav-links">
       <a href="<?= ScriptApp.getService().getUrl() ?>" class="active">Player View</a>
+      <a href="<?= ScriptApp.getService().getUrl() ?>?page=overview">Overview</a>
       <a href="<?= ScriptApp.getService().getUrl() ?>?page=admin">Admin View</a>
     </div>
     <div class="nav-actions">
@@ -192,8 +218,9 @@
         <input type="hidden" id="modal-tile-id">
         <label for="player-name">Player Name(s):</label>
         <input type="text" id="player-name" required>
-        <label for="evidence" id="evidence-label">Evidence:</label>
-        <textarea id="evidence" rows="3"></textarea>
+        <label id="evidence-label">Evidence:</label>
+        <div id="evidence-container"></div>
+        <button type="button" id="add-evidence-btn" onclick="addEvidenceInput()">+ Add Evidence Item</button>
         <label for="notes">Notes and Comments:</label>
         <textarea id="notes" rows="3"></textarea>
         <div class="checkbox-container">
@@ -218,21 +245,10 @@
     console.log('--- HTML SCRIPT LOADED --- Version 10');
     let boardDataCache = null;
     let currentTeam = '';
-    let pollingIntervalId = null;
 
     document.addEventListener('DOMContentLoaded', fetchInitialData);
 
-    function startPolling() {
-        if (!boardDataCache || !boardDataCache.config || !boardDataCache.config.fullConfig) return;
-        const pollingRateValue = boardDataCache.config.fullConfig['Polling Rate (ms)'];
-        const pollingRate = parseInt(pollingRateValue, 10);
-        if (pollingIntervalId) clearInterval(pollingIntervalId);
-        if (!isNaN(pollingRate) && pollingRate > 0) {
-            pollingIntervalId = setInterval(pollForUpdates, pollingRate);
-        }
-    }
-
-    // NEW: Function to handle refresh button click
+    // Function to handle refresh button click
     function refreshData() {
       showMessage('Refreshing data...', false);
       pollForUpdates();
@@ -259,7 +275,6 @@
           renderScoreboard();
           document.getElementById('evidence-label').textContent = data.config.evidenceLabel;
           document.getElementById('loader').style.display = 'none';
-          startPolling();
         })
         .withFailureHandler(error => {
           showMessage('Failed to load board data: ' + error.message, true);
@@ -332,17 +347,21 @@
     }
 
     function renderBoard() {
-      if (!boardDataCache || !currentTeam) {
-        document.getElementById('board-container').innerHTML = '<div id="loader" style="display: block;">Please select a team to view the board.</div>';
+      if (!boardDataCache) {
+        document.getElementById('board-container').innerHTML = '<div id="loader" style="display: block;">Loading board data...</div>';
         return;
       }
 
       const container = document.getElementById('board-container');
       container.innerHTML = '';
       const displayTeam = currentTeam;
-      document.title = `${boardDataCache.config.pageTitle} : ${displayTeam}`;
-      document.getElementById('page-title').textContent = document.title;
       
+      if (displayTeam) {
+        document.title = `${boardDataCache.config.pageTitle} : ${displayTeam}`;
+      } else {
+        document.title = boardDataCache.config.pageTitle;
+      }
+      document.getElementById('page-title').textContent = document.title;
       const tooltip = document.getElementById('tile-tooltip');
 
       const renderTiles = () => {
@@ -406,8 +425,13 @@
               stampDiv.style.transform = `scale(${stampScale}) rotate(${stampRotation})`;
               tileDiv.appendChild(stampDiv);
           }
-          if (status !== 'Locked') {
+          if (displayTeam && status !== 'Locked') {
             tileDiv.onclick = () => openModal(tile, status);
+          } else if (!displayTeam) {
+            // If no team is selected, show a message on click.
+            tileDiv.onclick = () => {
+              showMessage('Please select a team to interact with a tile.', true);
+            };
           }
           container.appendChild(tileDiv);
         });
@@ -454,6 +478,14 @@
                 const colorBox = document.createElement('div');
                 colorBox.className = 'key-color-box';
                 colorBox.style.backgroundColor = hexToRgba(color, opacity);
+
+                // Check for and apply a stamp image if configured
+                const useStamp = config[`Use Stamp by Default (${status})`] === true;
+                const stampImg = config[`Stamp Image (${status})`];
+                if (useStamp && stampImg) {
+                    colorBox.style.backgroundImage = `url('${stampImg}')`;
+                }
+
                 const keyLabel = document.createElement('span');
                 keyLabel.textContent = status;
                 keyItem.appendChild(colorBox);
@@ -479,6 +511,41 @@
         });
     }
 
+    // --- NEW: Dynamic Evidence Field Functions ---
+    function addEvidenceInput(link = '', name = '') {
+        const container = document.getElementById('evidence-container');
+        const itemCount = container.children.length;
+
+        const evidenceItemDiv = document.createElement('div');
+        evidenceItemDiv.className = 'evidence-item';
+
+        evidenceItemDiv.innerHTML = `
+            <div class="evidence-item-header">
+                <label>Evidence #${itemCount + 1}</label>
+                <button type="button" class="remove-evidence-btn" onclick="this.parentElement.parentElement.remove(); renumberEvidenceItems();">&times;</button>
+            </div>
+            <input type="text" class="evidence-link" placeholder="Link (e.g., https://discord...)" value="${link}">
+            <input type="text" class="evidence-name" placeholder="Name / Description" value="${name}">
+        `;
+        container.appendChild(evidenceItemDiv);
+    }
+
+    function renumberEvidenceItems() {
+        const container = document.getElementById('evidence-container');
+        const items = container.querySelectorAll('.evidence-item');
+        items.forEach((item, index) => {
+            const label = item.querySelector('label');
+            if (label) {
+                label.textContent = `Evidence #${index + 1}`;
+            }
+        });
+    }
+
+    function clearEvidenceInputs() {
+        const container = document.getElementById('evidence-container');
+        container.innerHTML = '';
+    }
+
     function openModal(tile, status) {
       document.getElementById('submission-form').reset();
       document.getElementById('modal-tile-id').value = tile.id;
@@ -492,14 +559,32 @@
       formElements.forEach(el => el.disabled = !isEditable);
       document.getElementById('submit-button').textContent = isEditable ? 'Save Progress' : 'Verified (Locked)';
 
+      // Clear previous dynamic fields
+      clearEvidenceInputs();
+
       google.script.run
         .withSuccessHandler(details => {
           if (details) {
             document.getElementById('player-name').value = details.playerName || '';
-            document.getElementById('evidence').value = details.evidence || '';
             document.getElementById('notes').value = details.notes || '';
             document.getElementById('mark-as-complete').checked = details.isComplete;
             document.getElementById('requires-action').checked = details.requiresAction;
+
+            // Populate evidence fields
+            let evidenceData = [];
+            try {
+                evidenceData = JSON.parse(details.evidence);
+                if (!Array.isArray(evidenceData)) throw new Error("Not an array");
+            } catch (e) {
+                // Handle old plain text evidence for backward compatibility
+                if (details.evidence) evidenceData = [{ link: details.evidence, name: '' }];
+            }
+            
+            if (evidenceData.length > 0) {
+                evidenceData.forEach(item => addEvidenceInput(item.link, item.name));
+            } else {
+                addEvidenceInput(); // Start with one empty item if no evidence exists
+            }
           }
           document.getElementById('submission-modal').style.display = 'flex';
         })
@@ -515,10 +600,20 @@
       const submitButton = document.getElementById('submit-button');
       submitButton.disabled = true; submitButton.textContent = 'Submitting...';
 
+      // --- NEW: Collect evidence data ---
+      const evidenceItems = [];
+      document.querySelectorAll('#evidence-container .evidence-item').forEach(item => {
+          const link = item.querySelector('.evidence-link').value.trim();
+          const name = item.querySelector('.evidence-name').value.trim();
+          if (link || name) { // Only add if at least one field is filled
+              evidenceItems.push({ link, name });
+          }
+      });
+
       const submissionData = {
         tileId: document.getElementById('modal-tile-id').value,
         playerName: document.getElementById('player-name').value,
-        evidence: document.getElementById('evidence').value,
+        evidence: JSON.stringify(evidenceItems),
         notes: document.getElementById('notes').value,
         team: currentTeam,
         password: document.getElementById('team-password').value,
@@ -531,6 +626,7 @@
           if (response.success) {
             showMessage(response.message, false);
             pollForUpdates();
+            clearEvidenceInputs();
             closeModal();
           } else {
             showMessage(response.message, true);

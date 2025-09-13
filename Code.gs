@@ -5,7 +5,9 @@
 // Serves the correct HTML page based on the URL parameter.
 function doGet(e) {
   let template;
-  if (e.parameter.page === 'admin') {
+  if (e.parameter.page === 'overview') {
+    template = HtmlService.createTemplateFromFile('overview');
+  } else if (e.parameter.page === 'admin') {
     template = HtmlService.createTemplateFromFile('admin');
   } else {
     template = HtmlService.createTemplateFromFile('index');
@@ -13,6 +15,40 @@ function doGet(e) {
   return template.evaluate().setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
+/**
+ * Helper to get sheet data as an array of objects, using the first row as keys.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet to process.
+ * @returns {{data: Object[], headers: string[]}} An object containing the data and headers.
+ */
+function getSheetDataAsObjects(sheet) {
+  if (!sheet || sheet.getLastRow() < 1) return { data: [], headers: [] };
+  const values = sheet.getDataRange().getValues();
+  const headers = values.shift().map(h => String(h || '').trim());
+  
+  const data = values.map(row => {
+    const obj = {};
+    headers.forEach((header, i) => {
+      obj[header] = row[i];
+    });
+    return obj;
+  });
+  return { data, headers };
+}
+
+/**
+ * Helper to get sheet headers as a list and a name-to-index map.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet to process.
+ * @returns {{list: string[], map: Object<string, number>}} An object with the header list and map.
+ */
+function getHeaders(sheet) {
+    if (!sheet || sheet.getLastRow() < 1) return { list: [], map: {} };
+    const list = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h || '').trim());
+    const map = list.reduce((acc, header, i) => {
+        if (header) acc[header] = i + 1; // 1-based index for ranges
+        return acc;
+    }, {});
+    return { list, map };
+}
 /**
  * Intelligently parses a value from the spreadsheet.
  * @param {any} value The value from the spreadsheet cell.
@@ -70,18 +106,18 @@ function getBoardData() {
     }
     
     // --- Get Tile Definitions ---
-    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:K' + tilesSheet.getLastRow()).getValues() : [];
-    const tiles = tileData.map(row => {
+    const { data: tileObjects } = getSheetDataAsObjects(tilesSheet);
+    const tiles = tileObjects.map(row => {
       let overrides = {};
       try {
-        if (row[10]) overrides = JSON.parse(row[10]);
+        if (row['Overrides (JSON)']) overrides = JSON.parse(row['Overrides (JSON)']);
       } catch (e) { /* Ignore invalid JSON */ }
       return {
-        id: row[0], name: row[1], description: row[2],
-        prerequisites: row[3] ? String(row[3]).split(',').map(p => p.trim()) : [],
-        top: row[4], left: row[5], width: row[6], height: row[7], 
-        points: parseInt(row[8]) || 0,
-        rotation: row[9] || '0deg',
+        id: row['TileID'], name: row['Name'], description: row['Description'],
+        prerequisites: row['Prerequisites'] ? String(row['Prerequisites']).split(',').map(p => p.trim()) : [],
+        top: row['Top (%)'], left: row['Left (%)'], width: row['Width (%)'], height: row['Height (%)'], 
+        points: parseInt(row['Points']) || 0,
+        rotation: row['Rotation'] || '0deg',
         overrides: overrides
       };
     }).filter(t => t.id); // Ensure tile has an ID
@@ -125,20 +161,19 @@ function getTileDetails(tileId, teamName) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const submissionsSheet = ss.getSheetByName('Submissions');
     if (!submissionsSheet) return null;
-    const submissions = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange('A2:I' + submissionsSheet.getLastRow()).getValues() : [];
+    const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
     
-    for (let i = submissions.length - 1; i >= 0; i--) {
-      const sub = submissions[i];
-      if (sub[3] === tileId && sub[2] === teamName) {
-        return {
-          playerName: sub[1], evidence: sub[4], notes: sub[5],
-          isComplete: sub[7] === true, requiresAction: sub[8] === true
-        };
-      }
+    const sub = submissions.slice().reverse().find(s => s['TileID'] === tileId && s['Team'] === teamName);
+
+    if (sub) {
+      return {
+        playerName: sub['Player Name'], evidence: sub['Evidence'], notes: sub['Notes'],
+        isComplete: sub['IsComplete'] === true, requiresAction: sub['RequiresAction'] === true
+      };
     }
-    return null; // No submission found
+    return null;
   } catch(e) {
-    return { error: e.message };
+    return { error: 'Failed to get tile details: ' + e.message };
   }
 }
 
@@ -157,38 +192,50 @@ function getLatestTeamData() {
       return { error: "Required sheet not found." };
     }
 
-    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:I' + tilesSheet.getLastRow()).getValues() : [];
-    const tilePointsMap = tileData.reduce((acc, row) => {
-        if (row[0]) acc[row[0]] = parseInt(row[8]) || 0;
+    const { data: tileObjects } = getSheetDataAsObjects(tilesSheet);
+    const tilePointsMap = tileObjects.reduce((acc, row) => {
+        if (row['TileID']) acc[row['TileID']] = parseInt(row['Points']) || 0;
         return acc;
     }, {});
 
-    const submissions = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange('A2:I' + submissionsSheet.getLastRow()).getValues() : [];
+    const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
     const teamNamesList = String(config['Team Names'] || '').split(',').map(t => t.trim());
     const teamData = {};
     teamNamesList.forEach(name => {
-      teamData[name] = { scores: 0, tileStates: {}, submissionDetails: {} };
+      teamData[name] = { scores: 0, tileStates: {} };
     });
 
+    // Determine the latest state for each team's tile
+    const latestStates = {};
     submissions.forEach(sub => {
-        const team = sub[2];
-        const tileId = sub[3];
-        if (!team || !tileId) return; // Skip invalid submission rows
-
-        const isVerified = sub[6] === true;
-
-        if (teamData[team]) {
-            if (isVerified && tilePointsMap[tileId] && !teamData[team].tileStates[tileId]?.verified) {
-                teamData[team].scores += tilePointsMap[tileId];
-            }
-            teamData[team].tileStates[tileId] = {
-                verified: isVerified,
-                complete: sub[7] === true,
-                requiresAction: sub[8] === true,
-                hasSubmission: true
-            };
-        }
+        const team = sub['Team'];
+        const tileId = sub['TileID'];
+        if (!team || !tileId) return;
+        const key = `${team}-${tileId}`;
+        latestStates[key] = {
+            verified: sub['Admin Verified'] === true,
+            complete: sub['IsComplete'] === true,
+            requiresAction: sub['RequiresAction'] === true,
+            hasSubmission: true
+        };
     });
+
+    const scoreOnVerifiedOnly = config['Score on Verified Only'] !== false; // Default to TRUE
+
+    // Populate teamData with states and calculate scores based on the latest state
+    for (const key in latestStates) {
+        const [team, tileId] = key.split('-');
+        if (teamData[team]) {
+            const state = latestStates[key];
+            teamData[team].tileStates[tileId] = state;
+
+            const pointValue = tilePointsMap[tileId] || 0;
+            const shouldScore = scoreOnVerifiedOnly ? state.verified : state.complete;
+            if (shouldScore && pointValue > 0) {
+                teamData[team].scores += pointValue;
+            }
+        }
+    }
 
     const scoreboardData = Object.entries(teamData)
                                 .map(([team, data]) => ({ team: team, score: data.scores }))
@@ -196,6 +243,7 @@ function getLatestTeamData() {
 
     return { teamData, scoreboard: scoreboardData };
   } catch (e) {
+    Logger.log(e.stack);
     return { error: e.message };
   }
 }
@@ -216,17 +264,51 @@ function submitOrUpdateTile(submissionData) {
     }
 
     const submissionsSheet = ss.getSheetByName('Submissions');
+    const { list: headers, map: headerMap } = getHeaders(submissionsSheet);
     const submissions = submissionsSheet.getDataRange().getValues();
     let rowIndex = -1;
+
+    const teamColIndex = headerMap['Team'] - 1;
+    const tileIdColIndex = headerMap['TileID'] - 1;
+
+    let existingRowValues = null;
+    let existingIsComplete = false;
+    const completionTimestampColIndex = headerMap['CompletionTimestamp'] ? headerMap['CompletionTimestamp'] - 1 : -1;
+
     // Search backwards for the most recent entry
     for (let i = submissions.length - 1; i >= 1; i--) {
-      if (submissions[i][2] === submissionData.team && submissions[i][3] === submissionData.tileId) {
+      if (submissions[i][teamColIndex] === submissionData.team && submissions[i][tileIdColIndex] === submissionData.tileId) {
         rowIndex = i + 1;
+        existingRowValues = submissions[i];
+        existingIsComplete = existingRowValues[headerMap['IsComplete'] - 1] === true;
         break;
       }
     }
 
-    const rowData = [ new Date(), submissionData.playerName, submissionData.team, submissionData.tileId, submissionData.evidence, submissionData.notes, false, submissionData.isComplete, submissionData.requiresAction ];
+    const rowData = headers.map(header => {
+        switch(header) {
+            case 'Timestamp': return new Date();
+            case 'CompletionTimestamp':
+                const isNowComplete = submissionData.isComplete;
+                if (isNowComplete && !existingIsComplete) {
+                    return new Date(); // Transitioning to complete
+                } else if (!isNowComplete && existingIsComplete) {
+                    return ''; // Transitioning away from complete
+                } else {
+                    // No change in completion status, keep old value or set initial
+                    return existingRowValues && completionTimestampColIndex !== -1 ? existingRowValues[completionTimestampColIndex] : (isNowComplete ? new Date() : '');
+                }
+            case 'Player Name': return submissionData.playerName;
+            case 'Team': return submissionData.team;
+            case 'TileID': return submissionData.tileId;
+            case 'Evidence': return submissionData.evidence;
+            case 'Notes': return submissionData.notes;
+            case 'Admin Verified': return false; // Always false on player submission/update
+            case 'IsComplete': return submissionData.isComplete;
+            case 'RequiresAction': return submissionData.requiresAction;
+            default: return '';
+        }
+    });
 
     if (rowIndex !== -1) {
       submissionsSheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
@@ -291,13 +373,13 @@ function getAdminData(password) {
     });
 
     // NEW: Get Tile data and map it by ID
-    const tileData = tilesSheet.getLastRow() > 1 ? tilesSheet.getRange('A2:C' + tilesSheet.getLastRow()).getValues() : [];
-    const tilesMap = tileData.reduce((acc, row) => {
-      const tileId = row[0];
+    const { data: tileObjects } = getSheetDataAsObjects(tilesSheet);
+    const tilesMap = tileObjects.reduce((acc, row) => {
+      const tileId = row['TileID'];
       if (tileId) {
         acc[tileId] = {
-          name: row[1],
-          description: row[2]
+          name: row['Name'],
+          description: row['Description']
         };
       }
       return acc;
@@ -312,6 +394,104 @@ function getAdminData(password) {
   }
 }
 
+/**
+ * Fetches and processes data for the overview page.
+ */
+function getOverviewData() {
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const config = getFullConfig(ss);
+        const tilesSheet = ss.getSheetByName('Tiles');
+        const submissionsSheet = ss.getSheetByName('Submissions');
+
+        if (!tilesSheet || !submissionsSheet) {
+            return { success: false, error: "Required sheet not found." };
+        }
+
+        // --- Get latest data for scores and states ---
+        const latestData = getLatestTeamData();
+        if (latestData.error) return latestData;
+
+        // --- Process for Leaderboard ---
+        const scoreOnVerifiedOnlyForLeaderboard = config['Score on Verified Only'] !== false;
+        const leaderboard = latestData.scoreboard.map(item => {
+            const teamName = item.team;
+            const teamStates = latestData.teamData[teamName].tileStates;
+            const completedTiles = Object.values(teamStates).filter(state => {
+                return scoreOnVerifiedOnlyForLeaderboard ? state.verified : state.complete;
+            }).length;
+            return { team: teamName, score: item.score, completedTiles: completedTiles };
+        });
+
+        // --- Process for Feed & Chart ---
+        const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
+        const { data: tileObjects } = getSheetDataAsObjects(tilesSheet);
+        const tileInfoMap = tileObjects.reduce((acc, row) => {
+            if (row['TileID']) {
+                acc[row['TileID']] = {
+                    name: row['Name'],
+                    points: parseInt(row['Points']) || 0
+                };
+            }
+            return acc;
+        }, {});
+
+        const feedItems = submissions
+            .filter(s => s['IsComplete'] || s['Admin Verified'])
+            .sort((a, b) => new Date(b['Timestamp']) - new Date(a['Timestamp']))
+            .slice(0, 20)
+            .map(s => ({
+                team: s['Team'],
+                tileId: s['TileID'],
+                tileName: tileInfoMap[s['TileID']] ? tileInfoMap[s['TileID']].name : 'Unknown',
+                timestamp: new Date(s['Timestamp']).toLocaleString(),
+                status: s['Admin Verified'] ? 'Verified' : 'Completed'
+            }));
+
+        // --- Process for Chart Data (historical analysis) ---
+        const scoreOnVerifiedOnlyForChart = config['Score on Verified Only'] !== false;
+        const allEvents = submissions
+            .map(s => ({
+                timestamp: new Date(s['Timestamp']),
+                team: s['Team'],
+                tileId: s['TileID'],
+                isScorable: scoreOnVerifiedOnlyForChart ? s['Admin Verified'] === true : s['IsComplete'] === true
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+        const teamScoresOverTime = {};
+        const teamCompletedTiles = {};
+        const chartDataPoints = [];
+        const teamNamesList = String(config['Team Names'] || '').split(',').map(t => t.trim());
+
+        teamNamesList.forEach(team => {
+            teamScoresOverTime[team] = 0;
+            teamCompletedTiles[team] = {};
+        });
+
+        allEvents.forEach(event => {
+            if (!event.team || !event.tileId || !tileInfoMap.hasOwnProperty(event.tileId)) return;
+            const pointValue = tileInfoMap[event.tileId].points;
+            const wasScored = teamCompletedTiles[event.team][event.tileId] === true;
+            if (event.isScorable && !wasScored) {
+                teamScoresOverTime[event.team] += pointValue;
+                teamCompletedTiles[event.team][event.tileId] = true;
+            } else if (!event.isScorable && wasScored) {
+                teamScoresOverTime[event.team] -= pointValue;
+                teamCompletedTiles[event.team][event.tileId] = false;
+            } else { return; } // No change in score status for this tile, so no new data point
+            const dataPoint = { timestamp: event.timestamp.toISOString() };
+            teamNamesList.forEach(team => { dataPoint[team] = teamScoresOverTime[team]; });
+            chartDataPoints.push(dataPoint);
+        });
+
+        return { success: true, feed: feedItems, leaderboard: leaderboard, chartData: chartDataPoints, config: { pageTitle: config['Page Title'], teamNames: teamNamesList } };
+    } catch (e) {
+        Logger.log(e.stack);
+        return { success: false, error: e.message };
+    }
+}
+
 function updateSubmissionStatus(updateData) {
    if (!verifyAdminPassword(updateData.password)) {
       return { success: false, message: 'Invalid Admin Password. Session may have expired.' };
@@ -320,29 +500,45 @@ function updateSubmissionStatus(updateData) {
    try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const submissionsSheet = ss.getSheetByName('Submissions');
+    const { map: headerMap } = getHeaders(submissionsSheet);
     const submissions = submissionsSheet.getDataRange().getValues();
     let rowIndex = -1;
 
+    const timestampColIndex = headerMap['Timestamp'] - 1;
+    const teamColIndex = headerMap['Team'] - 1;
+    const tileIdColIndex = headerMap['TileID'] - 1;
+
+    let oldIsComplete = false;
+
     // Search backwards to find the exact submission by timestamp, team, and tileId
     for (let i = submissions.length - 1; i >= 1; i--) {
-      const rowTimestamp = new Date(submissions[i][0]).toISOString();
-      const rowTeam = submissions[i][2];
-      const rowTileId = submissions[i][3];
+      const rowTimestamp = new Date(submissions[i][timestampColIndex]).toISOString();
+      const rowTeam = submissions[i][teamColIndex];
+      const rowTileId = submissions[i][tileIdColIndex];
       if (rowTimestamp === updateData.timestamp && rowTeam === updateData.team && rowTileId === updateData.tileId) {
         rowIndex = i + 1;
+        oldIsComplete = submissions[i][headerMap['IsComplete'] - 1] === true;
         break;
       }
     }
 
     if (rowIndex === -1) {
-      return { success: false, message: 'Could not find the specific submission to update. It may have been modified.' };
+      return { success: false, message: 'Could not find the submission to update. It may have been modified.' };
     }
     
+    const newIsComplete = updateData.isComplete;
+
     // Update the correct columns based on the sheet structure
-    submissionsSheet.getRange(rowIndex, 6).setValue(updateData.notes); // Column F: Notes
-    submissionsSheet.getRange(rowIndex, 7).setValue(updateData.adminVerified); // Column G: Admin Verified
-    submissionsSheet.getRange(rowIndex, 8).setValue(updateData.isComplete); // Column H: IsComplete
-    submissionsSheet.getRange(rowIndex, 9).setValue(updateData.requiresAction); // Column I: RequiresAction
+    submissionsSheet.getRange(rowIndex, headerMap['Notes']).setValue(updateData.notes);
+    submissionsSheet.getRange(rowIndex, headerMap['Admin Verified']).setValue(updateData.adminVerified);
+    submissionsSheet.getRange(rowIndex, headerMap['IsComplete']).setValue(newIsComplete);
+    submissionsSheet.getRange(rowIndex, headerMap['RequiresAction']).setValue(updateData.requiresAction);
+    
+    // NEW: Update CompletionTimestamp based on change in 'IsComplete' status
+    if (headerMap['CompletionTimestamp']) {
+        if (newIsComplete && !oldIsComplete) { submissionsSheet.getRange(rowIndex, headerMap['CompletionTimestamp']).setValue(new Date()); }
+        else if (!newIsComplete && oldIsComplete) { submissionsSheet.getRange(rowIndex, headerMap['CompletionTimestamp']).setValue(''); }
+    }
     
     return { success: true, message: 'Submission updated!' };
   } catch (error) {

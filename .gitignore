@@ -1,0 +1,5 @@
+# Ignore all files and subdirectories within /tile_tools/
+/tile_tools/*
+
+# But do not ignore (un-ignore) this specific file
+!/tile_tools/tile_editor.html
