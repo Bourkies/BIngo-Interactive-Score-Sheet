@@ -623,36 +623,55 @@ function saveSetupPageData(payload) {
 
     // 2. Save Config/Style Data
     const configSheet = ss.getSheetByName('Config');
-    const currentConfig = getFullConfig(ss);
-    
+    const currentConfigFromSheet = getFullConfig(ss);
+
+    // Create a mutable copy to work with
+    const newConfig = { ...currentConfigFromSheet };
+
     const styleData = Utilities.parseCsv(payload.styleCsv);
     styleData.shift(); // remove header
     styleData.forEach(row => {
       const key = row[0];
       if (key && key !== 'Team Names' && key !== 'Team Passwords' && key !== 'Admin Password') {
-        currentConfig[key] = row[1];
+        newConfig[key] = row[1];
       }
     });
 
     const security = payload.securityConfig;
-    if (security.adminPass) currentConfig['Admin Password'] = security.adminPass;
+    if (security.adminPass) newConfig['Admin Password'] = security.adminPass;
 
-    const oldTeamNames = (currentConfig['Team Names'] || '').split(',').map(t => t.trim());
-    const oldTeamPasswords = (currentConfig['Team Passwords'] || '').split(',').map(p => p.trim());
+    const oldTeamNames = (newConfig['Team Names'] || '').split(',').map(t => t.trim());
+    const oldTeamPasswords = (newConfig['Team Passwords'] || '').split(',').map(p => p.trim());
     const oldPasswordsMap = oldTeamNames.reduce((acc, name, i) => { acc[name] = oldTeamPasswords[i] || ''; return acc; }, {});
 
     const newTeamNames = security.teams.map(t => t.name).filter(Boolean);
     const newTeamPasswords = newTeamNames.map(name => {
         const teamPayload = security.teams.find(t => t.name === name);
-        return teamPayload.password || oldPasswordsMap[name] || '';
+        return teamPayload.password || oldPasswordsMap[name] || ''; // Keep old password if new one isn't provided
     });
 
-    currentConfig['Team Names'] = newTeamNames.join(',');
-    currentConfig['Team Passwords'] = newTeamPasswords.join(',');
+    newConfig['Team Names'] = newTeamNames.join(',');
+    newConfig['Team Passwords'] = newTeamPasswords.join(',');
 
-    const newConfigData = Object.keys(currentConfig).map(key => [key, currentConfig[key]]);
-    configSheet.clearContents();
-    if (newConfigData.length > 0) configSheet.getRange(1, 1, newConfigData.length, 2).setValues(newConfigData);
+    // --- Safer Update for Config Sheet ---
+    // This method avoids clearing the sheet, preserving other columns and key order.
+    const lastRow = configSheet.getLastRow();
+    const sheetKeys = lastRow > 0 ? configSheet.getRange(1, 1, lastRow, 1).getValues().flat() : [];
+    const keysToAppend = [];
+
+    for (const key in newConfig) {
+      const rowIndex = sheetKeys.indexOf(key);
+      if (rowIndex !== -1) {
+        // Key exists, update its value in column B
+        configSheet.getRange(rowIndex + 1, 2).setValue(newConfig[key]);
+      } else {
+        // Key is new, add it to a list to be appended at the end
+        keysToAppend.push([key, newConfig[key]]);
+      }
+    }
+    if (keysToAppend.length > 0) {
+      configSheet.getRange(lastRow + 1, 1, keysToAppend.length, 2).setValues(keysToAppend);
+    }
 
     return 'Success';
   } catch (e) {

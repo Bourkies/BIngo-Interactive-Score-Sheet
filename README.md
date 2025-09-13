@@ -30,6 +30,9 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | **Setting** | **Value** | **Description** |
 | **General Settings** |  |  |
 | Page Title | Bingo Board | Page or board title. |
+| Admin Password | admin | Password to access the Admin Verification page. |
+| Team Names | Team 1, Team 2, Team 3, Team 4, Team 5, Team 6, Team 7 | Comma-separated list of each team name. |
+| Team Passwords | pass1, pass2, pass3, pass4, pass5, pass6, pass7 | Comma-separated list that corresponds exactly to your Team Names list. |
 | Max Page Width | 1400 | Sets the maximum width of the content in pixels (e.g., 1200). |
 | Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field in the submission form. |
 | Unlock on Verified Only | FALSE | Sets if tiles are unlocked only after a prerequisite tile is verified by an admin (TRUE), or as soon as it's marked complete by a player (FALSE). |
