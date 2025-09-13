@@ -23,17 +23,14 @@ You need to create three tabs at the bottom of the sheet. Rename them exactly as
 
 ### **Step 3: Populate the 'Config' Tab**
 
-This sheet controls the overall settings for your bingo board. Click and copy the following table into the sheet then update the settings as desired.
+This sheet controls the overall settings for your bingo board. Click and copy the following table into the sheet then update the settings as desired. **Note:** It is highly recommended to manage security settings (passwords, teams) and other configurations via the new **Board Setup** page after the initial setup.
 
 | A | B | C |
 | :---- | :---- | :---- |
 | **Setting** | **Value** | **Description** |
 | **General Settings** |  |  |
 | Page Title | Bingo Board | Page or board title. |
-| Admin Password | your\_secret\_password | Password to access the Admin Verification page. |
 | Max Page Width | 1400 | Sets the maximum width of the content in pixels (e.g., 1200). |
-| Team Names | Team 1, Team 2, Team 3 | Comma-separated list of each team name. |
-| Team Passwords | pass1, pass2, pass3 | Comma-separated list that corresponds exactly to your Team Names list. |
 | Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field in the submission form. |
 | Unlock on Verified Only | FALSE | Sets if tiles are unlocked only after a prerequisite tile is verified by an admin (TRUE), or as soon as it's marked complete by a player (FALSE). |
 | Score on Verified Only | FALSE | Sets if points are awarded only after a tile is verified by an admin (TRUE), or as soon as it's marked complete by a player (FALSE). |
@@ -147,7 +144,8 @@ This script connects your sheet to the web app.
 1. **Code.gs**: Delete any content inside and copy-paste the code from the Code.gs document provided.  
 2. **overview.html**: Click the + icon in the "Files" sidebar, select "HTML", name it `overview`, and copy-paste the code from the `overview.html` document provided.
 2. **index.html**: Delete any content inside and copy-paste the code from the index.html document provided.
-3. **admin.html**: Click the + icon in the "Files" sidebar, select "HTML", name it admin, and copy-paste the code from the admin.html document provided.
+3. **admin.html**: Click the + icon in the "Files" sidebar, select "HTML", name it `admin`, and copy-paste the code from the admin.html document provided.
+4. **Setup.html**: Click the + icon in the "Files" sidebar, select "HTML", name it `Setup`, and copy-paste the code from the `Setup.html` document provided.
 
 ### **Step 3: Save and Deploy**
 
@@ -172,6 +170,26 @@ All pages contain a navigation bar at the top to easily switch between the Playe
 ### **Overview Page**
 
 This page provides a public dashboard for the event, showing a leaderboard, a live feed of recent completions, and a chart of each team's score over time.
+
+### **Board Setup Page**
+
+This project includes a powerful **Board Setup** page that provides a graphical interface for editing the entire bingo board configuration. It is accessible from the main navigation bar.
+
+#### **Features**
+
+-   **Password Protected**: Access is restricted to users with the admin password.
+-   **Visual Tile Editor**: Drag, drop, and resize tiles directly on the board image.
+-   **Live Style Editor**: Modify global and tile-specific styles and see a live preview.
+-   **Team & Security Management**: Add or remove teams and change admin/team passwords.
+-   **Direct Google Sheet Sync**: Load and save all configurations directly to and from your Google Sheet.
+
+#### ⚠️ **Security Warning**
+
+The setup page provides full administrative control over the bingo board's configuration, including all tile data, styles, and passwords.
+
+**It is strongly recommended to remove the link to this page and/or the `Setup.html` file itself from your Google Apps Script project once the initial board setup is complete.**
+
+Leaving this page active in a live environment increases the risk of an unauthorized user gaining access and causing irreversible damage to your board data if they manage to guess the admin password.
 
 ### **Admin View**
 

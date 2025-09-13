@@ -9,6 +9,8 @@ function doGet(e) {
     template = HtmlService.createTemplateFromFile('overview');
   } else if (e.parameter.page === 'admin') {
     template = HtmlService.createTemplateFromFile('admin');
+  } else if (e.parameter.page === 'Setup') {
+    template = HtmlService.createTemplateFromFile('Setup');
   } else {
     template = HtmlService.createTemplateFromFile('index');
   }
@@ -544,6 +546,120 @@ function updateSubmissionStatus(updateData) {
   } catch (error) {
     Logger.log(`Error in updateSubmissionStatus after password verification: ${error.stack}`);
     return { success: false, message: 'An error occurred while updating the submission.' };
+  }
+}
+
+// --- SETUP PAGE FUNCTIONS ---
+
+/**
+ * Fetches all data required for the setup page from the Google Sheet.
+ * @return {object} An object containing CSV strings for tiles and styles,
+ *                  and a configuration object for security settings.
+ */
+function getSetupPageData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const tileSheet = ss.getSheetByName('Tiles');
+    const configSheet = ss.getSheetByName('Config');
+
+    if (!tileSheet || !configSheet) {
+      throw new Error('Could not find "Tiles" or "Config" sheet.');
+    }
+
+    // 1. Get Tile Data as CSV
+    const tileData = tileSheet.getDataRange().getValues();
+    const tileCsv = tileData.map(row => {
+      return row.map(cell => {
+        const strCell = String(cell);
+        if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) {
+          return `"${strCell.replace(/"/g, '""')}"`;
+        }
+        return strCell;
+      }).join(',');
+    }).join('\n');
+
+    // 2. Get Config/Style Data as CSV
+    const configData = configSheet.getDataRange().getValues();
+    const styleCsv = configData.map(row => `"${String(row[0]).replace(/"/g, '""')}","${String(row[1]).replace(/"/g, '""')}"`).join('\n');
+
+    // 3. Get Security/Team Data from Config
+    const config = getFullConfig(ss);
+    const teamNames = (config['Team Names'] || '').split(',').map(t => t.trim()).filter(Boolean);
+    
+    const securityConfig = {
+      teams: teamNames.map(name => ({ name: name }))
+      // We don't send passwords to the client
+    };
+
+    return {
+      tileCsv: tileCsv,
+      styleCsv: styleCsv,
+      securityConfig: securityConfig
+    };
+  } catch (e) {
+    Logger.log('Error in getSetupPageData: ' + e.toString());
+    throw new Error('Could not load data from the spreadsheet. Check sheet names ("Tiles", "Config").');
+  }
+}
+
+/**
+ * Saves all setup data from the page back to the Google Sheet.
+ * @param {object} payload The data object from the client.
+ *                         { tileCsv: string, styleCsv: string, securityConfig: object }
+ */
+function saveSetupPageData(payload) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds.
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. Save Tile Data
+    const tileSheet = ss.getSheetByName('Tiles');
+    const tileData = Utilities.parseCsv(payload.tileCsv);
+    tileSheet.clearContents();
+    if (tileData.length > 0) {
+      tileSheet.getRange(1, 1, tileData.length, tileData[0].length).setValues(tileData);
+    }
+
+    // 2. Save Config/Style Data
+    const configSheet = ss.getSheetByName('Config');
+    const currentConfig = getFullConfig(ss);
+    
+    const styleData = Utilities.parseCsv(payload.styleCsv);
+    styleData.shift(); // remove header
+    styleData.forEach(row => {
+      const key = row[0];
+      if (key && key !== 'Team Names' && key !== 'Team Passwords' && key !== 'Admin Password') {
+        currentConfig[key] = row[1];
+      }
+    });
+
+    const security = payload.securityConfig;
+    if (security.adminPass) currentConfig['Admin Password'] = security.adminPass;
+
+    const oldTeamNames = (currentConfig['Team Names'] || '').split(',').map(t => t.trim());
+    const oldTeamPasswords = (currentConfig['Team Passwords'] || '').split(',').map(p => p.trim());
+    const oldPasswordsMap = oldTeamNames.reduce((acc, name, i) => { acc[name] = oldTeamPasswords[i] || ''; return acc; }, {});
+
+    const newTeamNames = security.teams.map(t => t.name).filter(Boolean);
+    const newTeamPasswords = newTeamNames.map(name => {
+        const teamPayload = security.teams.find(t => t.name === name);
+        return teamPayload.password || oldPasswordsMap[name] || '';
+    });
+
+    currentConfig['Team Names'] = newTeamNames.join(',');
+    currentConfig['Team Passwords'] = newTeamPasswords.join(',');
+
+    const newConfigData = Object.keys(currentConfig).map(key => [key, currentConfig[key]]);
+    configSheet.clearContents();
+    if (newConfigData.length > 0) configSheet.getRange(1, 1, newConfigData.length, 2).setValues(newConfigData);
+
+    return 'Success';
+  } catch (e) {
+    Logger.log('Error in saveSetupPageData: ' + e.toString() + ' ' + e.stack);
+    throw new Error('Failed to save data. The sheet might be busy. Please try again.');
+  } finally {
+    lock.releaseLock();
   }
 }
 

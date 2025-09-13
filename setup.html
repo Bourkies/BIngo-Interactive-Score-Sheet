@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingo Board Setup</title>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #password-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .password-box {
+            background-color: #2d2d2d;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+        }
+        #password-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        #admin-password-input {
+            padding: 10px;
+            font-size: 16px;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+        h1, h2 {
+            color: #00aaff;
+            text-align: center;
+        }
+        p {
+            text-align: center;
+            max-width: 800px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column; /* Always stack vertically */
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px; /* Match the controls width */
+        }
+        .outputs-container {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            align-items: flex-start;
+        }
+        .editor-panel {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .output-panel {
+            width: 100%;
+            display: flex;
+            flex: 1; /* Allow panels to grow */
+            flex-direction: column;
+        }
+        /* This is now the viewport for panning and zooming */
+        #board-container {
+            position: relative;
+            width: 100%;
+            /* REVISED: Removed max-width to fill the new container */
+            margin: auto;
+            border-radius: 8px;
+            overflow: hidden; /* Crucial for panning effect */
+            border: 2px solid #444;
+            cursor: grab;
+        }
+        #board-container:active {
+            cursor: grabbing;
+        }
+        /* This new element will be scaled and moved */
+        #board-content {
+            position: relative;
+            width: 100%;
+            transform-origin: top left;
+            transition: transform 0.1s ease-out;
+        }
+        #board-image {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .draggable-tile {
+            position: absolute;
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            background-color: rgba(0, 170, 255, 0.3);
+            color: white;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-sizing: border-box;
+            cursor: move;
+            touch-action: none;
+            user-select: none;
+            padding: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer; /* Change cursor to indicate it's clickable */
+        }
+        #csv-output {
+            width: 100%;
+            height: 400px; /* Adjusted height slightly */
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #2d2d2d;
+            color: #f0f0f0;
+            border: 1px solid #444;
+            border-radius: 4px;
+            resize: vertical;
+            box-sizing: border-box; /* Ensure padding/border is included in width */
+        }
+        .output-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background-color: #00aaff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0088cc;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            background-color: #2d2d2d;
+            padding: 15px;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .main-actions {
+            display: flex;
+            gap: 15px;
+        }
+        .file-inputs {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .file-inputs > div {
+            display: flex;
+            flex-direction: column;
+        }
+        .file-inputs label {
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .file-inputs input {
+            font-size: 14px;
+        }
+        .zoom-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        /* Details Panel Styles */
+        .details-panel {
+            width: 100%;
+            background-color: #2d2d2d;
+            padding: 15px;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        .details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .details-header h2 {
+            margin: 0;
+        }
+        #add-new-tile-btn {
+            margin-top: 0;
+            background-color: #28a745;
+        }
+        #delete-tile-btn {
+            margin-top: 0;
+            background-color: #dc3545;
+        }
+        #toggle-global-styles-btn {
+            margin-top: 0;
+            padding: 5px 10px;
+            font-size: 18px;
+        }
+        #details-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .form-field {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-field label {
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .form-field input, .form-field textarea, .form-field select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+        .form-field textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .form-field input:disabled, .form-field textarea:disabled, .form-field select:disabled {
+            background-color: #2a2a2a;
+            cursor: not-allowed;
+            color: #666;
+        }
+        .overrides-fieldset {
+            grid-column: 1 / -1; /* Span all columns */
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 10px 15px;
+        }
+        .overrides-fieldset.minimized .fieldset-content {
+            display: none;
+        }
+        .overrides-fieldset .fieldset-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            padding-top: 10px;
+        }
+        .legend-toggle {
+            margin-right: 8px;
+            font-weight: bold;
+            display: inline-block;
+            width: 1em;
+        }
+        .overrides-fieldset legend {
+            color: #00aaff;
+        }
+        #overrides-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .override-item {
+            display: grid;
+            grid-template-columns: 1fr 2fr 40px;
+            gap: 10px;
+            align-items: center;
+        }
+        #add-override-btn {
+            background-color: #007bff;
+            width: fit-content;
+        }
+        #add-override-btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        #style-preview-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+        .remove-override-btn {
+            background-color: #c0392b;
+            padding: 8px;
+        }
+        .override-item input,
+        .override-item select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+        .form-field-compound {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .form-field-compound input[type="color"] {
+            padding: 0;
+            height: 38px;
+            min-width: 38px;
+        }
+        .form-field-compound input[type="range"] {
+            flex-grow: 1;
+        }
+        .form-field-compound input[type="text"] {
+            /* Give text inputs in compound fields a fixed width */
+            width: 80px;
+        }
+        #teams-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-top: 10px;
+        }
+        .team-item {
+            display: grid;
+            grid-template-columns: 1fr 1fr 80px;
+            gap: 10px;
+            align-items: center;
+        }
+        .team-item input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+        #add-team-btn {
+            margin-top: 10px;
+            width: fit-content;
+        }
+
+    </style>
+</head>
+<body>
+<div id="password-overlay">
+    <div class="password-box">
+        <h2>Admin Access Required</h2>
+        <p>Enter the admin password to access the board setup editor.</p>
+        <form id="password-form">
+            <input type="password" id="admin-password-input" placeholder="Admin Password" required>
+            <button type="submit">Unlock</button>
+        </form>
+        <p id="password-error" style="display:none; color: #e74c3c;"></p>
+    </div>
+</div>
+
+<div id="main-content" style="display: none;">
+    <h1>Bingo Board Setup</h1>
+    <p>Live editor for the bingo board configuration. Load the current settings from the Google Sheet, make your changes to tiles, styles, and security, then save everything back. Remember to save your changes!</p>
+
+    <div class="controls">
+        <div class="main-actions">
+            <button id="save-data-btn">Save All Changes to Sheet</button>
+        </div>
+        <div class="zoom-control">
+            <label for="zoom-slider">Zoom:</label>
+            <input type="range" id="zoom-slider" min="1" max="5" value="1" step="0.1">
+            <span id="zoom-value">100%</span>
+            <button id="reset-zoom">Reset</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="editor-panel">
+            <div id="style-preview-controls"></div>
+            <div id="board-container">
+                <div id="board-content">
+                    <img id="board-image" src="" alt="Load a background image to see the board" />
+                    <!-- Tiles will be injected here -->
+                </div>
+            </div>
+        </div>
+        <div id="security-editor-box" class="details-panel">
+            <div class="details-header">
+                <h2>Security & Teams</h2>
+            </div>
+            <form id="security-form">
+                <fieldset class="overrides-fieldset">
+                    <legend>Passwords</legend>
+                    <div class="fieldset-content" style="display: grid;">
+                        <div class="form-field">
+                            <label for="admin-password">Admin Password</label>
+                            <input type="text" id="admin-password" name="admin-password" placeholder="Leave blank to keep current">
+                        </div>
+                    </div>
+                </fieldset>
+                <fieldset class="overrides-fieldset"><legend>Teams</legend><div id="teams-container" class="fieldset-content" style="display: flex;"></div><button type="button" id="add-team-btn">+ Add Team</button></fieldset>
+            </form>
+        </div>
+        <div id="global-style-editor-box" class="details-panel">
+            <div class="details-header">
+                <h2>Global Config &amp; Styles</h2>
+                <button id="toggle-global-styles-btn" title="Toggle Visibility">-</button>
+            </div>
+            <form id="global-style-form">
+                <p>Load a Style CSV or edit the default values below. Changes will be reflected on the board live.</p>
+                <!-- Fieldsets will be generated here -->
+            </form>
+        </div>
+        <div id="tile-editor-box" class="details-panel">
+            <div class="details-header">
+                <h2>Edit Tile Details</h2>
+                <button id="delete-tile-btn" disabled>Delete Selected Tile</button>
+                <button id="add-new-tile-btn">Add New Tile</button>
+            </div>
+            <form id="details-form"></form>
+        </div>
+        <div class="outputs-container">
+            <div class="output-panel">
+                <h2>Generated Tile Position CSV</h2>
+                <textarea id="csv-output" readonly placeholder="Load a tile position CSV to see the output..."></textarea>
+                <div class="output-buttons">
+                    <button id="copy-button">Copy Tile CSV</button>
+                    <button id="download-button">Download Tile CSV</button>
+                </div>
+            </div>
+            <div class="output-panel">
+                <h2>Generated Config &amp; Style CSV</h2>
+                <textarea id="style-csv-output" readonly placeholder="Load or edit config &amp; styles to see the output..."></textarea>
+                <div class="output-buttons">
+                    <button id="copy-style-button">Copy Config CSV</button>
+                    <button id="download-style-button">Download Config CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <script>
+        let tilesData = [];
+        let csvHeader = [];
+        let csvSeparator = ',';
+        let securityConfig = { adminPass: '', teams: [] };
+        let newTileCounter = 1;
+        let lastSelectedTileIndex = null;
+        let currentPreviewStatus = null;
+        const STATUSES = ['Locked', 'Unlocked', 'Partially Complete', 'Submitted', 'Verified', 'Requires Action'];
+        
+        let globalStyles = {
+            // Board Config
+            'Board Image URL': '',
+            'Page Title': 'OSRS Bingo',
+            'Max Page Width': '1400px',
+            'Show Tile Names': 'FALSE',
+            'Unlock on Verified Only': 'FALSE',
+            'Show Scoreboard': 'TRUE',
+            'Evidence Label': 'Evidence:',
+            // Default Styles
+            'Default Tile Border Width': '2px', 'Default Tile Border Color': 'rgba(255, 255, 255, 0.7)',
+            'Hover Tile Border Color': '#00d9f5', 'Hover Tile Border Width': '3px',
+            'Default Tile Shape': 'Square',
+        };
+
+        // Dynamically populate default styles for each status
+        const defaultStatusStyles = {
+            'Locked': { color: '#333333', opacity: '0.5' },
+            'Unlocked': { color: '#00aaff', opacity: '0.3' },
+            'Partially Complete': { color: '#f1c40f', opacity: '0.6' },
+            'Submitted': { color: '#e67e22', opacity: '0.7' },
+            'Verified': { color: '#2ecc71', opacity: '0.8' },
+            'Requires Action': { color: '#e74c3c', opacity: '0.8' },
+        };
+        STATUSES.forEach(status => {
+            globalStyles[`Tile ${status}`] = defaultStatusStyles[status].color;
+            globalStyles[`${status} Opacity`] = defaultStatusStyles[status].opacity;
+            globalStyles[`Use Stamp by Default (${status})`] = 'FALSE';
+            globalStyles[`Stamp Image (${status})`] = '';
+            globalStyles[`Stamp Scale (${status})`] = '1';
+            globalStyles[`Stamp Rotation (${status})`] = '0deg';
+            globalStyles[`Stamp Position (${status})`] = 'center';
+        });
+
+        const STYLE_PROPERTY_GROUPS = {
+            'Board Configuration': ['Page Title', 'Board Image URL', 'Max Page Width', 'Show Tile Names', 'Unlock on Verified Only', 'Show Scoreboard', 'Evidence Label'],
+            'Default Tile Styles': ['Default Tile Shape', 'Default Tile Border Width', 'Default Tile Border Color', 'Hover Tile Border Width', 'Hover Tile Border Color'],
+        };
+        // Dynamically create property groups for each status
+        STATUSES.forEach(status => {
+            STYLE_PROPERTY_GROUPS[`Status Styles (${status})`] = [
+                `Tile ${status}`, `${status} Opacity`, `Use Stamp by Default (${status})`, `Stamp Image (${status})`,
+                `Stamp Scale (${status})`, `Stamp Rotation (${status})`, `Stamp Position (${status})`
+            ];
+        });
+
+        const VALID_OVERRIDE_PROPERTIES = [
+            // Tile Status Colors
+            'Tile Locked', 'Tile Unlocked', 'Tile Partially Complete', 'Tile Submitted', 'Tile Verified', 'Tile Requires Action',
+            // Opacities
+            'Locked Opacity', 'Unlocked Opacity', 'Partially Complete Opacity', 'Submitted Opacity', 'Verified Opacity', 'Requires Action Opacity',
+            // Default Styles
+            'Default Tile Shape', 'Default Tile Border Width', 'Default Tile Border Color',
+            // Hover Styles
+            'Hover Tile Border Width', 'Hover Tile Border Color',
+            // Stamp Usage
+            'Use Stamp by Default (Locked)', 'Use Stamp by Default (Unlocked)', 'Use Stamp by Default (Partially Complete)', 'Use Stamp by Default (Submitted)', 'Use Stamp by Default (Verified)', 'Use Stamp by Default (Requires Action)',
+            // Stamp Images
+            'Stamp Image (Locked)', 'Stamp Image (Unlocked)', 'Stamp Image (Partially Complete)', 'Stamp Image (Submitted)', 'Stamp Image (Verified)', 'Stamp Image (Requires Action)',
+            // Stamp Scale
+            'Stamp Scale (Locked)', 'Stamp Scale (Unlocked)', 'Stamp Scale (Partially Complete)', 'Stamp Scale (Submitted)', 'Stamp Scale (Verified)', 'Stamp Scale (Requires Action)',
+            // Stamp Rotation
+            'Stamp Rotation (Locked)', 'Stamp Rotation (Unlocked)', 'Stamp Rotation (Partially Complete)', 'Stamp Rotation (Submitted)', 'Stamp Rotation (Verified)', 'Stamp Rotation (Requires Action)',
+            // Stamp Position
+            'Stamp Position (Locked)', 'Stamp Position (Unlocked)', 'Stamp Position (Partially Complete)', 'Stamp Position (Submitted)', 'Stamp Position (Verified)', 'Stamp Position (Requires Action)',
+        ].sort();
+
+        const DESCRIPTIONS = {
+            // Board Config
+            'Page Title': 'The title displayed at the top of the bingo page and in the browser tab.',
+            'Board Image URL': 'A direct web URL to the bingo board background image.',
+            'Max Page Width': 'The maximum width for the page content. Use px or % (e.g., 1400px or 90%).',
+            'Show Tile Names': 'Set to TRUE to display tile names on the board by default, especially if no background image is used.',
+            'Unlock on Verified Only': 'Set to TRUE to require a tile to be "Verified" by an admin before its prerequisites are met for other tiles.',
+            'Show Scoreboard': 'Set to TRUE to display the team scoreboard at the bottom of the page.',
+            'Evidence Label': 'The text label displayed above the evidence submission inputs in the modal.',
+            // Default Styles
+            'Default Tile Shape': 'The overall shape of the tiles. "Square" is the default.',
+            'Default Tile Border Width': 'The thickness of the border on all tiles (e.g., 2px).',
+            'Default Tile Border Color': 'The color of the border on all tiles.',
+            'Hover Tile Border Width': 'The thickness of the border when a user hovers over a tile.',
+            'Hover Tile Border Color': 'The color of the border when a user hovers over a tile.',
+        };
+        STATUSES.forEach(status => {
+            DESCRIPTIONS[`Tile ${status}`] = `Background color for tiles that are "${status}".`;
+            DESCRIPTIONS[`${status} Opacity`] = `Opacity (transparency) for "${status}" tiles. 0 is fully transparent, 1 is fully opaque.`;
+            DESCRIPTIONS[`Use Stamp by Default (${status})`] = `Set to TRUE to show the stamp image on "${status}" tiles.`;
+            DESCRIPTIONS[`Stamp Image (${status})`] = `URL for the stamp image to display on "${status}" tiles.`;
+            DESCRIPTIONS[`Stamp Scale (${status})`] = `Size multiplier for the stamp on "${status}" tiles (e.g., 1 is 100%, 0.5 is 50%).`;
+            DESCRIPTIONS[`Stamp Rotation (${status})`] = `Rotation of the stamp on "${status}" tiles (e.g., 45deg).`;
+            DESCRIPTIONS[`Stamp Position (${status})`] = `Position of the stamp within the tile for "${status}" status (e.g., center, top left).`;
+        });
+
+
+        let currentScale = 1;
+        // Store pan coordinates
+        let pan = { x: 0, y: 0 };
+
+        const boardContainer = document.getElementById('board-container');
+        const boardContent = document.getElementById('board-content'); // The new pannable/zoomable element
+        const boardImage = document.getElementById('board-image');
+        const csvOutput = document.getElementById('csv-output');
+        const zoomSlider = document.getElementById('zoom-slider');
+        const zoomValue = document.getElementById('zoom-value');
+        const resetZoomBtn = document.getElementById('reset-zoom');
+        const copyButton = document.getElementById('copy-button');
+        const downloadButton = document.getElementById('download-button');
+        const copyStyleButton = document.getElementById('copy-style-button');
+        const downloadStyleButton = document.getElementById('download-style-button');
+        const detailsPanel = document.getElementById('tile-editor-box');
+        const detailsForm = document.getElementById('details-form');
+        const addNewTileBtn = document.getElementById('add-new-tile-btn');
+        const deleteTileBtn = document.getElementById('delete-tile-btn');
+        const toggleGlobalStylesBtn = document.getElementById('toggle-global-styles-btn');
+        const passwordForm = document.getElementById('password-form');
+        const mainContent = document.getElementById('main-content');
+        const passwordOverlay = document.getElementById('password-overlay');
+        const saveDataBtn = document.getElementById('save-data-btn');
+
+        // A more robust CSV/TSV parser
+        function parseCsvLine(line, separator) {
+            const values = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    if (inQuotes && line[i + 1] === '"') {
+                        current += '"';
+                        i++; // Skip next quote
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === separator && !inQuotes) {
+                    values.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            values.push(current);
+            return values;
+        }
+
+        function parseCSV(text) {
+            const lines = text.trim().replace(/\r\n/g, '\n').split('\n');
+            if (lines.length < 2) return [];
+            
+            csvSeparator = lines[0].includes('\t') ? '\t' : ',';
+            csvHeader = parseCsvLine(lines.shift(), csvSeparator).map(h => h.trim());
+            
+            return lines.map(line => {
+                if (!line.trim()) return null;
+                const values = parseCsvLine(line, csvSeparator);
+                const row = {};
+                csvHeader.forEach((key, index) => {
+                    row[key] = values[index] || '';
+                });
+
+                // Map to internal format, preserving all original columns
+                const internalRow = { ...row };
+                internalRow.id = row['TileID'];
+                internalRow.x_pct = parseFloat(row['Left (%)']) || 0;
+                internalRow.y_pct = parseFloat(row['Top (%)']) || 0;
+                internalRow.width_pct = parseFloat(row['Width (%)']) || 0;
+                internalRow.height_pct = parseFloat(row['Height (%)']) || 0;
+                return internalRow;
+            }).filter(Boolean); // Remove empty lines
+        }
+
+        function renderTiles() {
+            boardContent.querySelectorAll('.draggable-tile').forEach(el => el.remove());
+            if (!tilesData) return;
+            tilesData.forEach((tile, index) => {
+                const tileEl = document.createElement('div');
+                tileEl.classList.add('draggable-tile');
+                if (lastSelectedTileIndex === index) {
+                    tileEl.style.borderColor = '#00d9f5'; // Highlight selected tile
+                }
+                tileEl.dataset.index = index;
+
+                const showTileNames = (globalStyles['Show Tile Names'] || 'FALSE').toUpperCase() === 'TRUE';
+                tileEl.textContent = showTileNames ? (tile.Name || tile.id) : tile.id;
+
+                // --- NEW: Dynamic Styling ---
+                const status = currentPreviewStatus || 'Unlocked'; // Default to unlocked for preview
+                const getProp = (propName) => {
+                    if (tile['Overrides (JSON)']) {
+                        try {
+                            const overrides = JSON.parse(tile['Overrides (JSON)']);
+                            if (overrides[propName] !== undefined) return overrides[propName];
+                        } catch (e) {}
+                    }
+                    return globalStyles[propName];
+                };
+
+                tileEl.style.left = `${tile.x_pct || 10}%`;
+                tileEl.style.top = `${tile.y_pct || 10}%`;
+                tileEl.style.width = `${tile.width_pct || 10}%`;
+                tileEl.style.height = `${tile.height_pct || 10}%`;
+                tileEl.style.transform = `rotate(${tile['Rotation'] || '0deg'})`;
+
+                const color = getProp(`Tile ${status}`) || '#888888';
+                const opacity = getProp(`${status} Opacity`) || 0.5;
+                tileEl.style.backgroundColor = hexToRgba(color, opacity);
+
+                const borderWidth = getProp('Default Tile Border Width') || '2px';
+                const borderColor = getProp('Default Tile Border Color') || 'transparent';
+                tileEl.style.border = `${borderWidth} solid ${borderColor}`;
+
+                const shape = (getProp('Default Tile Shape') || 'Square').toLowerCase();
+                const clipPaths = { 'ellipse': 'ellipse(50% 50% at 50% 50%)', 'circle': 'ellipse(50% 50% at 50% 50%)', 'diamond': 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', 'triangle': 'polygon(50% 0%, 0% 100%, 100% 100%)', 'hexagon': 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' };
+                if (clipPaths[shape]) tileEl.style.clipPath = clipPaths[shape];
+
+                tileEl.addEventListener('mouseover', () => {
+                    const hoverWidth = getProp('Hover Tile Border Width') || '3px';
+                    const hoverColor = getProp('Hover Tile Border Color') || '#00d9f5';
+                    tileEl.style.border = `${hoverWidth} solid ${hoverColor}`;
+                });
+                tileEl.addEventListener('mouseout', () => {
+                    tileEl.style.border = `${borderWidth} solid ${borderColor}`;
+                });
+
+                boardContent.appendChild(tileEl); // Append to the content div
+            });
+        }
+
+        function generateCSV(header, data) {
+            const headerString = header.join(csvSeparator);
+            const rows = data.map(tile => {
+                // Map internal format back to CSV format for writing
+                const outputTile = { ...tile };
+                outputTile['Left (%)'] = (outputTile.x_pct || 0).toFixed(2);
+                outputTile['Top (%)'] = (outputTile.y_pct || 0).toFixed(2);
+                outputTile['Width (%)'] = (outputTile.width_pct || 0).toFixed(2);
+                outputTile['Height (%)'] = (outputTile.height_pct || 0).toFixed(2);
+
+                return header.map(key => {
+                    const value = outputTile[key];
+                    const stringValue = String(value === undefined || value === null ? '' : value);
+                    
+                    // Quote if it contains the separator, a quote, or a newline
+                    if (stringValue.includes(csvSeparator) || stringValue.includes('"') || stringValue.includes('\n')) {
+                        return `"${stringValue.replace(/"/g, '""')}"`;
+                    }
+                    return stringValue;
+                }).join(csvSeparator);
+            });
+            return [headerString, ...rows].join('\n');
+        }
+
+        function updateCsvOutput() {
+            if (tilesData.length === 0) return;
+            const csvString = generateCSV(csvHeader, tilesData);
+            csvOutput.value = csvString;
+        }
+
+        function parseStyleCSV(text) {
+            const styles = {};
+            const lines = text.trim().replace(/\r\n/g, '\n').split('\n');
+            const header = lines.shift(); // Assume header is "Property,Value"
+            lines.forEach(line => {
+                if (!line.trim()) return;
+                const parts = parseCsvLine(line, ',');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    const value = parts[1].trim();
+                    styles[key] = value;
+                }
+            });
+            return styles;
+        }
+
+        function generateStyleCSV() {
+            const header = 'Property,Value';
+            const rows = Object.entries(globalStyles).map(([key, value]) => {
+                const keyStr = `"${key.replace(/"/g, '""')}"`;
+                const valStr = `"${String(value).replace(/"/g, '""')}"`;
+                return `${keyStr},${valStr}`;
+            });
+            return [header, ...rows].join('\n');
+        }
+
+        function updateStyleCsvOutput() {
+            const csvString = generateStyleCSV();
+            document.getElementById('style-csv-output').value = csvString;
+        }
+
+
+        // NEW: Function to apply the zoom and pan transform
+        function applyTransform() {
+            boardContent.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${currentScale})`;
+        }
+
+        function updateZoom() {
+            currentScale = parseFloat(zoomSlider.value);
+            zoomValue.textContent = `${Math.round(currentScale * 100)}%`;
+            // When zooming, we might need to adjust the pan to keep the image centered
+            // For simplicity now, we just apply the transform. A more advanced version could zoom towards the mouse pointer.
+            applyTransform();
+        }
+
+        zoomSlider.addEventListener('input', updateZoom);
+
+        resetZoomBtn.addEventListener('click', () => {
+            zoomSlider.value = 1;
+            pan = { x: 0, y: 0 }; // Reset pan on zoom reset
+            updateZoom();
+        });
+
+        // NEW: Panning logic for the board container
+        interact(boardContainer)
+            .draggable({
+                listeners: {
+                    move(event) {
+                        pan.x += event.dx;
+                        pan.y += event.dy;
+                        applyTransform();
+                    }
+                },
+                // Only allow panning when the target is the container or image, not a tile
+                allowFrom: '#board-image, #board-container'
+            });
+
+        // REVISED: Tile interaction logic to correctly handle zoom
+        interact('.draggable-tile')
+            .draggable({
+                listeners: {
+                    move(event) {
+                        const target = event.target;
+                        const index = target.dataset.index;
+                        if (!tilesData[index]) return;
+
+                        const containerWidth = boardContainer.clientWidth;
+                        const containerHeight = boardContainer.clientHeight;
+
+                        // Correctly scale the mouse movement by the current zoom level
+                        const dx_scaled = event.dx / currentScale;
+                        const dy_scaled = event.dy / currentScale;
+
+                        const x_pct = (parseFloat(target.style.left) || 0) + (dx_scaled / containerWidth * 100);
+                        const y_pct = (parseFloat(target.style.top) || 0) + (dy_scaled / containerHeight * 100);
+
+                        target.style.left = `${x_pct}%`;
+                        target.style.top = `${y_pct}%`;
+
+                        const x_pct_val = parseFloat(x_pct.toFixed(2));
+                        const y_pct_val = parseFloat(y_pct.toFixed(2));
+                        tilesData[index].x_pct = x_pct_val;
+                        tilesData[index].y_pct = y_pct_val;
+                        tilesData[index]['Left (%)'] = x_pct_val.toFixed(2);
+                        tilesData[index]['Top (%)'] = y_pct_val.toFixed(2);
+                        updateEditorPanel(index);
+                        
+                        requestAnimationFrame(updateCsvOutput);
+                    }
+                }
+            })
+            .resizable({
+                edges: { left: true, right: true, bottom: true, top: true },
+                listeners: {
+                    move(event) {
+                        const target = event.target;
+                        const index = target.dataset.index;
+                        if (!tilesData[index]) return;
+
+                        const containerWidth = boardContainer.clientWidth;
+                        const containerHeight = boardContainer.clientHeight;
+
+                        let x_pct = parseFloat(target.style.left) || 0;
+                        let y_pct = parseFloat(target.style.top) || 0;
+                        
+                        // event.rect contains the new width/height, which needs to be scaled
+                        const width_pct = (event.rect.width / currentScale) / containerWidth * 100;
+                        const height_pct = (event.rect.height / currentScale) / containerHeight * 100;
+
+                        // event.deltaRect contains the change in position, also needs scaling
+                        x_pct += (event.deltaRect.left / currentScale) / containerWidth * 100;
+                        y_pct += (event.deltaRect.top / currentScale) / containerHeight * 100;
+
+                        target.style.width = `${width_pct}%`;
+                        target.style.height = `${height_pct}%`;
+                        target.style.left = `${x_pct}%`;
+                        target.style.top = `${y_pct}%`;
+                        
+                        const x_pct_val = parseFloat(x_pct.toFixed(2));
+                        const y_pct_val = parseFloat(y_pct.toFixed(2));
+                        const width_pct_val = parseFloat(width_pct.toFixed(2));
+                        const height_pct_val = parseFloat(height_pct.toFixed(2));
+
+                        tilesData[index].x_pct = x_pct_val;
+                        tilesData[index].y_pct = y_pct_val;
+                        tilesData[index].width_pct = width_pct_val;
+                        tilesData[index].height_pct = height_pct_val;
+                        tilesData[index]['Left (%)'] = x_pct_val.toFixed(2);
+                        tilesData[index]['Top (%)'] = y_pct_val.toFixed(2);
+                        tilesData[index]['Width (%)'] = width_pct_val.toFixed(2);
+                        tilesData[index]['Height (%)'] = height_pct_val.toFixed(2);
+                        updateEditorPanel(index);
+                        
+                        requestAnimationFrame(updateCsvOutput);
+                    }
+                }
+            });
+
+        copyButton.addEventListener('click', () => {
+            if(!csvOutput.value) return;
+            csvOutput.select();
+            document.execCommand('copy');
+            const originalText = copyButton.textContent;
+            copyButton.textContent = 'Copied!';
+            setTimeout(() => {
+                copyButton.textContent = originalText;
+            }, 1500);
+        });
+
+        downloadButton.addEventListener('click', () => {
+            if (!csvOutput.value) return;
+
+            const blob = new Blob([csvOutput.value], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'tile_positions.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        copyStyleButton.addEventListener('click', () => {
+            const output = document.getElementById('style-csv-output');
+            if(!output.value) return;
+            output.select();
+            document.execCommand('copy');
+            const originalText = copyStyleButton.textContent;
+            copyStyleButton.textContent = 'Copied!';
+            setTimeout(() => { copyStyleButton.textContent = originalText; }, 1500);
+        });
+
+        downloadStyleButton.addEventListener('click', () => {
+            const output = document.getElementById('style-csv-output');
+            if (!output.value) return;
+            const blob = new Blob([output.value], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'tile_styles.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        function hexToRgba(colorStr, alpha) {
+            if (!colorStr || typeof colorStr !== 'string') return `rgba(255, 255, 255, ${alpha})`;
+            const sColor = colorStr.trim();
+            if (sColor === 'transparent') return 'transparent';
+            if (!sColor.startsWith('#')) return sColor;
+            const hex = sColor.slice(1);
+            let r = 0, g = 0, b = 0;
+            if (hex.length === 3) { r = parseInt(hex[0] + hex[0], 16); g = parseInt(hex[1] + hex[1], 16); b = parseInt(hex[2] + hex[2], 16); }
+            else if (hex.length === 6) { r = parseInt(hex.substring(0, 2), 16); g = parseInt(hex.substring(2, 4), 16); b = parseInt(hex.substring(4, 6), 16); }
+            else { return `rgba(255, 255, 255, ${alpha})`; }
+            if (isNaN(r) || isNaN(g) || isNaN(b)) return `rgba(255, 255, 255, ${alpha})`;
+            return `rgba(${r},${g},${b},${alpha})`;
+        }
+
+
+        // --- Tile Selection & Editor Panel Logic ---
+
+        
+        function createEditorForm(header) {
+            detailsForm.innerHTML = ''; // Clear previous form
+            header.forEach(key => {
+                const fieldContainer = document.createElement('div');
+                fieldContainer.className = 'form-field';
+
+                const label = document.createElement('label');
+                label.htmlFor = `edit-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                label.title = key; // Add tooltip with full name
+                label.textContent = key;
+
+                // Skip creating a direct field for Overrides (JSON)
+                if (key === 'Overrides (JSON)') return;
+
+                const posKeys = ['Left (%)', 'Top (%)', 'Width (%)', 'Height (%)'];
+                if (posKeys.includes(key)) {
+                    const compound = document.createElement('div');
+                    compound.className = 'form-field-compound';
+                    const rangeInput = document.createElement('input');
+                    rangeInput.type = 'range';
+                    rangeInput.min = 0; rangeInput.max = 100; rangeInput.step = 0.01;
+                    rangeInput.dataset.sync = key;
+                    const textInput = document.createElement('input');
+                    textInput.type = 'text';
+                    textInput.name = key;
+                    textInput.dataset.sync = key;
+                    compound.append(rangeInput, textInput);
+                    fieldContainer.appendChild(compound);
+                } else if (key === 'Rotation') {
+                    const compound = document.createElement('div');
+                    compound.className = 'form-field-compound';
+                    const rangeInput = document.createElement('input');
+                    rangeInput.type = 'range';
+                    rangeInput.min = 0; rangeInput.max = 360; rangeInput.step = 1;
+                    rangeInput.dataset.sync = key;
+                    const textInput = document.createElement('input');
+                    textInput.type = 'text';
+                    textInput.name = key;
+                    textInput.dataset.sync = key;
+                    compound.append(rangeInput, textInput);
+                    fieldContainer.appendChild(compound);
+                } else if (key.toLowerCase().includes('description')) {
+                    const textarea = document.createElement('textarea');
+                    textarea.id = `edit-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    textarea.name = key;
+                    textarea.title = key;
+                    fieldContainer.appendChild(textarea);
+                } else {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = `edit-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    input.name = key;
+                    input.title = key;
+                    fieldContainer.appendChild(input);
+                }
+
+                fieldContainer.prepend(label);
+                detailsForm.appendChild(fieldContainer);
+            });
+
+            // Create a dedicated section for overrides
+            const fieldset = document.createElement('fieldset');
+            fieldset.className = 'overrides-fieldset';
+            const legend = document.createElement('legend');
+            legend.textContent = 'Overrides';
+            
+            const overridesContainer = document.createElement('div');
+            overridesContainer.id = 'overrides-container';
+
+            const addOverrideBtn = document.createElement('button');
+            addOverrideBtn.type = 'button';
+            addOverrideBtn.id = 'add-override-btn';
+            addOverrideBtn.textContent = '+ Add Override';
+            addOverrideBtn.disabled = true;
+            addOverrideBtn.addEventListener('click', () => addOverrideRow());
+
+            fieldset.appendChild(legend);
+            fieldset.appendChild(overridesContainer);
+            fieldset.appendChild(addOverrideBtn);
+
+            detailsForm.appendChild(fieldset);
+        }
+
+        function updateEditorPanel(index) {
+            if (index === null || !tilesData[index]) {
+                lastSelectedTileIndex = null;
+                deleteTileBtn.disabled = true;
+                document.getElementById('add-override-btn').disabled = true;
+                Array.from(detailsForm.elements).forEach(el => {
+                    el.disabled = true;
+                    el.value = '';
+                });
+                return;
+            }
+            
+            lastSelectedTileIndex = index;
+            const tile = tilesData[index];
+
+            Array.from(detailsForm.elements).forEach(el => el.disabled = false);
+            document.getElementById('add-override-btn').disabled = false;
+            deleteTileBtn.disabled = false;
+
+            // Populate the form
+            csvHeader.forEach(key => {
+                // Skip the raw overrides field
+                if (key === 'Overrides (JSON)') return;
+
+                const input = detailsForm.elements[key];
+                const syncElements = detailsForm.querySelectorAll(`[data-sync="${key}"]`);
+                if (syncElements.length > 0) {
+                    const value = tile[key] || '';
+                    syncElements.forEach(el => {
+                        if (key === 'Rotation' && el.type === 'range') {
+                            el.value = parseFloat(value) || 0;
+                        } else {
+                            el.value = value;
+                        }
+                    });
+                } else if (input) {
+                    input.value = tile[key] || '';
+                }
+            });
+
+            // Populate the overrides section
+            let overrides = {};
+            try {
+                if (tile['Overrides (JSON)']) {
+                    overrides = JSON.parse(tile['Overrides (JSON)']);
+                }
+            } catch (e) { /* Ignore invalid JSON */ }
+
+            // Clear and populate override rows
+            document.getElementById('overrides-container').innerHTML = '';
+            for (const [key, value] of Object.entries(overrides)) {
+                addOverrideRow(key, value);
+            }
+        }
+
+        function addOverrideRow(key = '', value = '') {
+            const container = document.getElementById('overrides-container');
+            const item = document.createElement('div');
+            item.className = 'override-item';
+
+            const valueContainer = document.createElement('div');
+            valueContainer.className = 'override-value-container';
+
+            const keySelect = document.createElement('select');
+            keySelect.className = 'override-key';
+
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Select a property...';
+            keySelect.appendChild(placeholder);
+
+            VALID_OVERRIDE_PROPERTIES.forEach(prop => {
+                const option = document.createElement('option');
+                option.value = prop;
+                option.textContent = prop;
+                keySelect.appendChild(option);
+            });
+
+            keySelect.value = key;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-override-btn';
+            removeBtn.textContent = '−';
+
+            item.append(keySelect, valueContainer, removeBtn);
+            container.appendChild(item);
+
+            keySelect.addEventListener('change', () => {
+                populateValueContainer(valueContainer, keySelect.value, '');
+                // Manually trigger an input event on the form to update the JSON
+                keySelect.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+
+            populateValueContainer(valueContainer, key, value);
+
+            removeBtn.addEventListener('click', () => {
+                item.remove();
+                updateOverridesJsonForCurrentTile();
+                renderTiles();
+                requestAnimationFrame(updateCsvOutput);
+            });
+        }
+
+        function populateValueContainer(container, propertyName, value) {
+            container.innerHTML = ''; // Clear previous input
+
+            const isColor = propertyName.toLowerCase().includes('color');
+            const isOpacity = propertyName.toLowerCase().includes('opacity');
+            const isBoolean = propertyName.startsWith('Use Stamp by Default');
+            const isShape = propertyName === 'Default Tile Shape';
+
+            if (isColor) {
+                const compound = document.createElement('div');
+                compound.className = 'form-field-compound';
+                const colorInput = document.createElement('input');
+                colorInput.type = 'color';
+                const textInput = document.createElement('input');
+                textInput.type = 'text';
+                textInput.className = 'override-value';
+                
+                colorInput.value = value;
+                textInput.value = value;
+
+                colorInput.addEventListener('input', () => { textInput.value = colorInput.value; textInput.dispatchEvent(new Event('input', { bubbles: true })); });
+                textInput.addEventListener('input', () => { try { colorInput.value = textInput.value; } catch(e) {} });
+
+                compound.append(colorInput, textInput);
+                container.appendChild(compound);
+            } else if (isOpacity) {
+                const compound = document.createElement('div');
+                compound.className = 'form-field-compound';
+                const rangeInput = document.createElement('input');
+                rangeInput.type = 'range';
+                rangeInput.min = 0; rangeInput.max = 1; rangeInput.step = 0.01;
+                const textInput = document.createElement('input');
+                textInput.type = 'text';
+                textInput.className = 'override-value';
+                textInput.style.maxWidth = '60px';
+
+                rangeInput.value = value;
+                textInput.value = value;
+
+                rangeInput.addEventListener('input', () => { textInput.value = rangeInput.value; textInput.dispatchEvent(new Event('input', { bubbles: true })); });
+                textInput.addEventListener('input', () => { rangeInput.value = textInput.value; });
+
+                compound.append(rangeInput, textInput);
+                container.appendChild(compound);
+            } else if (isBoolean) {
+                const select = document.createElement('select');
+                select.className = 'override-value';
+                ['', 'TRUE', 'FALSE'].forEach(val => {
+                    const option = document.createElement('option');
+                    option.value = val; option.textContent = val === '' ? 'Default' : val;
+                    select.appendChild(option);
+                });
+                // Handle both boolean and string "true"/"false" from JSON
+                if (typeof value === 'boolean') {
+                    select.value = value ? 'TRUE' : 'FALSE';
+                } else {
+                    select.value = String(value).toUpperCase();
+                }
+                if (value === '') select.value = '';
+
+                container.appendChild(select);
+            } else if (isShape) {
+                const select = document.createElement('select');
+                select.className = 'override-value';
+                ['', 'Square', 'Ellipse', 'Circle', 'Diamond', 'Triangle', 'Hexagon'].forEach(shape => {
+                    const option = document.createElement('option');
+                    option.value = shape; option.textContent = shape === '' ? 'Default' : shape;
+                    select.appendChild(option);
+                });
+                select.value = value;
+                container.appendChild(select);
+            } else {
+                const valueInput = document.createElement('input');
+                valueInput.type = 'text';
+                valueInput.className = 'override-value';
+                valueInput.placeholder = 'Value';
+                valueInput.value = value;
+                container.appendChild(valueInput);
+            }
+        }
+
+        function handleEditorInputChange(event) {
+            if (lastSelectedTileIndex === null) return;
+
+            const input = event.target;
+            // Check if the input is part of an override item
+            if (input.closest('.override-item')) {
+                updateOverridesJsonForCurrentTile();
+                renderTiles(); // Re-render to apply style overrides
+            } else {
+                updateMainTileData(input);
+            }
+            
+            requestAnimationFrame(updateCsvOutput);
+        }
+
+        function updateMainTileData(input) {
+            const index = lastSelectedTileIndex;
+            if (index === null) return;
+            const tile = tilesData[index];
+            const key = input.dataset.sync || input.name;
+            let value = input.value;
+
+            // Handle Rotation slider specifically to add 'deg'
+            if (key === 'Rotation' && input.type === 'range') {
+                value = `${value}deg`;
+            }
+
+            // If a synced input changes, update the others
+            const syncName = input.dataset.sync;
+            if (syncName) {
+                detailsForm.querySelectorAll(`[data-sync="${syncName}"]`).forEach(el => {
+                    if (el !== input) {
+                        // When updating the rotation slider from the text input
+                        if (syncName === 'Rotation' && el.type === 'range') {
+                            el.value = parseFloat(value) || 0;
+                        } else {
+                            el.value = value;
+                        }
+                    }
+                });
+            }
+            
+            tile[key] = value;
+
+            // If a position/size/ID/Rotation field was changed, update the visual tile
+            const tileEl = boardContent.querySelector(`[data-index="${index}"]`);
+            if (!tileEl) return;
+
+            if (key === 'TileID') {
+                tileEl.textContent = value;
+            } else if (key === 'Rotation') {
+                tileEl.style.transform = `rotate(${value || '0deg'})`;
+            }
+            
+            const posKeys = {'Left (%)': 'x_pct', 'Top (%)': 'y_pct', 'Width (%)': 'width_pct', 'Height (%)': 'height_pct'};
+            if (posKeys[key]) {
+                const floatValue = parseFloat(value) || 0;
+                tile[posKeys[key]] = floatValue;
+                if (key === 'Left (%)') tileEl.style.left = `${floatValue}%`;
+                if (key === 'Top (%)') tileEl.style.top = `${floatValue}%`;
+                if (key === 'Width (%)') tileEl.style.width = `${floatValue}%`;
+                if (key === 'Height (%)') tileEl.style.height = `${floatValue}%`;
+            }
+        }
+
+        function updateOverridesJsonForCurrentTile() {
+            if (lastSelectedTileIndex === null) return;
+            const index = lastSelectedTileIndex;
+
+            const overrides = {};
+            document.querySelectorAll('#overrides-container .override-item').forEach(item => {
+                const key = item.querySelector('.override-key').value;
+                const valueInput = item.querySelector('.override-value');
+                if (key && valueInput) {
+                    let value = valueInput.value;
+                    if (value !== '') {
+                        if (value === 'TRUE') {
+                            overrides[key] = true;
+                        } else if (value === 'FALSE') {
+                            overrides[key] = false;
+                        } else {
+                            overrides[key] = value;
+                        }
+                    }
+                }
+            });
+            if (Object.keys(overrides).length > 0) {
+                tilesData[index]['Overrides (JSON)'] = JSON.stringify(overrides);
+            } else {
+                tilesData[index]['Overrides (JSON)'] = '';
+            }
+        }
+
+        function addNewTile() {
+            const newTile = {};
+            csvHeader.forEach(key => newTile[key] = '');
+
+            const newId = `NewTile_${newTileCounter++}`;
+            newTile['TileID'] = newId;
+            newTile['Name'] = 'New Tile';
+            newTile['Left (%)'] = '45.00';
+            newTile['Top (%)'] = '45.00';
+            newTile['Width (%)'] = '10.00';
+            newTile['Height (%)'] = '10.00';
+
+            // Map to internal format
+            newTile.id = newId;
+            newTile.x_pct = 45.0;
+            newTile.y_pct = 45.0;
+            newTile.width_pct = 10.0;
+            newTile.height_pct = 10.0;
+
+            const newIndex = tilesData.push(newTile) - 1;
+            renderTiles(); // Redraws all tiles including the new one
+            updateEditorPanel(newIndex); // Selects the new tile
+            updateCsvOutput();
+        }
+
+        function deleteSelectedTile() {
+            if (lastSelectedTileIndex === null) return;
+            if (confirm(`Are you sure you want to delete tile "${tilesData[lastSelectedTileIndex].TileID}"?`)) {
+                tilesData.splice(lastSelectedTileIndex, 1);
+                lastSelectedTileIndex = null;
+                renderTiles();
+                updateEditorPanel(null); // Explicitly clear the editor panel
+                updateCsvOutput();
+            }
+        }
+
+        detailsForm.addEventListener('input', handleEditorInputChange);
+        addNewTileBtn.addEventListener('click', addNewTile);
+        deleteTileBtn.addEventListener('click', deleteSelectedTile);
+        toggleGlobalStylesBtn.addEventListener('click', toggleGlobalStyles);
+        document.getElementById('global-style-form').addEventListener('input', handleGlobalStyleInputChange);
+
+        boardContent.addEventListener('click', (event) => {
+            // Don't open modal if the user is dragging/resizing with interact.js
+            if (event.target.classList.contains('interact-resizing') || event.target.classList.contains('interact-dragging')) {
+                return;
+            }
+            const tileEl = event.target.closest('.draggable-tile');
+            if (tileEl) {
+                const index = parseInt(tileEl.dataset.index, 10);
+                updateEditorPanel(index);
+            }
+        });
+
+        function toggleGlobalStyles() {
+            const form = document.getElementById('global-style-form');
+            const isHidden = form.style.display === 'none';
+            form.style.display = isHidden ? '' : 'none';
+            toggleGlobalStylesBtn.textContent = isHidden ? '-' : '+';
+        }
+        // --- Global Style Editor Logic ---
+        function createGlobalStyleEditorForm() {
+            const form = document.getElementById('global-style-form');
+            form.innerHTML = ''; // Clear existing
+            Object.entries(STYLE_PROPERTY_GROUPS).forEach(([groupName, properties]) => {
+                const fieldset = document.createElement('fieldset');
+                fieldset.className = 'overrides-fieldset minimized';
+                const legend = document.createElement('legend');
+                legend.innerHTML = `<span class="legend-toggle">[+]</span>${groupName}`;
+                fieldset.appendChild(legend);
+
+                const fieldsetContent = document.createElement('div');
+                fieldsetContent.className = 'fieldset-content';
+
+                legend.addEventListener('click', () => {
+                    fieldset.classList.toggle('minimized');
+                    const toggle = legend.querySelector('.legend-toggle');
+                    toggle.textContent = fieldset.classList.contains('minimized') ? '[+]' : '[-]';
+                });
+
+                properties.forEach(prop => {
+                    const fieldContainer = document.createElement('div');
+                    fieldContainer.className = 'form-field';
+                    const label = document.createElement('label');
+                    label.textContent = prop;
+                    label.title = DESCRIPTIONS[prop] || '';
+                    fieldContainer.appendChild(label);
+
+
+                    if (prop.toLowerCase().includes('color')) {
+                        const compound = document.createElement('div');
+                        compound.className = 'form-field-compound';
+                        const colorInput = document.createElement('input');
+                        colorInput.type = 'color';
+                        colorInput.dataset.sync = prop;
+                        const textInput = document.createElement('input');
+                        textInput.type = 'text';
+                        textInput.name = prop;
+                        textInput.dataset.sync = prop;
+                        compound.append(colorInput, textInput);
+                        fieldContainer.appendChild(compound);
+                    } else if (prop.toLowerCase().includes('opacity')) {
+                        const compound = document.createElement('div');
+                        compound.className = 'form-field-compound';
+                        const rangeInput = document.createElement('input');
+                        rangeInput.type = 'range';
+                        rangeInput.min = 0; rangeInput.max = 1; rangeInput.step = 0.01;
+                        rangeInput.dataset.sync = prop;
+                        const textInput = document.createElement('input');
+                        textInput.type = 'text';
+                        textInput.name = prop;
+                        textInput.dataset.sync = prop;
+                        textInput.style.maxWidth = '60px';
+                        compound.append(rangeInput, textInput);
+                        fieldContainer.appendChild(compound);
+                    } else if (prop.endsWith('Border Width')) {
+                        const compound = document.createElement('div');
+                        compound.className = 'form-field-compound';
+                        const rangeInput = document.createElement('input');
+                        rangeInput.type = 'range';
+                        rangeInput.min = 0; rangeInput.max = 10; rangeInput.step = 1;
+                        rangeInput.dataset.sync = prop;
+                        const textInput = document.createElement('input');
+                        textInput.type = 'text';
+                        textInput.name = prop;
+                        textInput.dataset.sync = prop;
+                        compound.append(rangeInput, textInput);
+                        fieldContainer.appendChild(compound);
+                    } else if (prop.startsWith('Stamp Scale')) {
+                        const compound = document.createElement('div');
+                        compound.className = 'form-field-compound';
+                        const rangeInput = document.createElement('input');
+                        rangeInput.type = 'range';
+                        rangeInput.min = 0; rangeInput.max = 3; rangeInput.step = 0.05;
+                        rangeInput.dataset.sync = prop;
+                        const textInput = document.createElement('input');
+                        textInput.type = 'text';
+                        textInput.name = prop;
+                        textInput.dataset.sync = prop;
+                        compound.append(rangeInput, textInput);
+                        fieldContainer.appendChild(compound);
+                    } else if (prop.startsWith('Stamp Rotation')) {
+                        const compound = document.createElement('div');
+                        compound.className = 'form-field-compound';
+                        const rangeInput = document.createElement('input');
+                        rangeInput.type = 'range';
+                        rangeInput.min = 0; rangeInput.max = 360; rangeInput.step = 1;
+                        rangeInput.dataset.sync = prop;
+                        const textInput = document.createElement('input');
+                        textInput.type = 'text';
+                        textInput.name = prop;
+                        textInput.dataset.sync = prop;
+                        compound.append(rangeInput, textInput);
+                        fieldContainer.appendChild(compound);
+                    } else if (prop === 'Default Tile Shape') {
+                        const select = document.createElement('select');
+                        select.name = prop;
+                        ['Square', 'Ellipse', 'Circle', 'Diamond', 'Triangle', 'Hexagon'].forEach(shape => {
+                            const option = document.createElement('option');
+                            option.value = shape; option.textContent = shape;
+                            select.appendChild(option);
+                        });
+                        fieldContainer.appendChild(select);
+                    } else if (['Show Tile Names', 'Unlock on Verified Only', 'Show Scoreboard'].includes(prop) || prop.startsWith('Use Stamp by Default')) {
+                        const select = document.createElement('select');
+                        select.name = prop;
+                        ['FALSE', 'TRUE'].forEach(val => {
+                            const option = document.createElement('option');
+                            option.value = val; option.textContent = val;
+                            select.appendChild(option);
+                        });
+                        fieldContainer.appendChild(select);
+                    } else {
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.name = prop;
+                        fieldContainer.appendChild(input);
+                    }
+                    fieldsetContent.appendChild(fieldContainer);
+                });
+
+                fieldset.appendChild(fieldsetContent);
+                form.appendChild(fieldset);
+            });
+        }
+
+
+        function populateGlobalStyleEditor() {
+            const form = document.getElementById('global-style-form');
+            for (const [key, value] of Object.entries(globalStyles)) {
+                // Handle compound fields
+                const syncElements = form.querySelectorAll(`[data-sync="${key}"]`);
+                if (syncElements.length > 0) {
+                    syncElements.forEach(el => {
+                        if ((key.startsWith('Stamp Rotation') || key.endsWith('Border Width')) && el.type === 'range') {
+                            el.value = parseFloat(value) || 0;
+                        } else {
+                            el.value = value;
+                        }
+                    });
+                } else if (form.elements[key]) { // Handle simple fields
+                    form.elements[key].value = value;
+                }
+
+            }
+        }
+
+        function handleGlobalStyleInputChange(event) {
+            const input = event.target;
+            const syncName = input.dataset.sync;
+            let value = input.value;
+
+            if (syncName) { // It's a compound field
+                // Update other synced inputs
+                document.querySelectorAll(`[data-sync="${syncName}"]`).forEach(el => {
+                    if (el !== input) {
+                        el.value = value;
+                    }
+                });
+
+                // Determine the value to store in globalStyles (with suffix if needed)
+                if (syncName.startsWith('Stamp Rotation')) {
+                    globalStyles[syncName] = `${parseFloat(value) || 0}deg`;
+                } else if (syncName.endsWith('Border Width')) {
+                    globalStyles[syncName] = `${parseFloat(value) || 0}px`;
+                } else {
+                    globalStyles[syncName] = value;
+                }
+            } else {
+                globalStyles[input.name] = input.value;
+            }
+
+            if (input.name === 'Board Image URL') {
+                boardImage.src = input.value;
+            }
+
+            updateStyleCsvOutput();
+            renderTiles();
+        }
+
+        // --- Style Preview Logic ---
+        function createStylePreviewButtons() {
+            const container = document.getElementById('style-preview-controls');
+            const statuses = ['Locked', 'Unlocked', 'Partially Complete', 'Submitted', 'Verified', 'Requires Action', null];
+            statuses.forEach(status => {
+                const btn = document.createElement('button');
+                btn.textContent = status || 'Clear Preview';
+                btn.onclick = () => {
+                    currentPreviewStatus = status;
+                    container.querySelectorAll('button').forEach(b => b.style.backgroundColor = '');
+                    if (status) btn.style.backgroundColor = '#0088cc';
+                    renderTiles();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        // --- New Data Sync and Security Logic ---
+
+        function checkPassword(event) {
+            event.preventDefault();
+            const passwordInput = document.getElementById('admin-password-input');
+            const password = passwordInput.value;
+            const errorEl = document.getElementById('password-error');
+            errorEl.style.display = 'none';
+            passwordInput.disabled = true;
+            event.target.querySelector('button').disabled = true;
+
+            // This will call your server-side Apps Script function
+            google.script.run
+                .withSuccessHandler(isValid => {
+                    if (isValid) {
+                        passwordOverlay.style.display = 'none';
+                        mainContent.style.display = 'block';
+                        loadDataFromSheet();
+                    } else {
+                        errorEl.textContent = 'Incorrect password.';
+                        errorEl.style.display = 'block';
+                        passwordInput.disabled = false;
+                        event.target.querySelector('button').disabled = false;
+                    }
+                })
+                .withFailureHandler(err => {
+                    errorEl.textContent = 'Error: ' + err.message;
+                    errorEl.style.display = 'block';
+                    passwordInput.disabled = false;
+                    event.target.querySelector('button').disabled = false;
+                })
+                .verifyAdminPassword(password);
+        }
+
+        function loadDataFromSheet() {
+            console.log("Loading configuration from Google Sheet...");
+            // You can add a loading spinner here
+            google.script.run
+                .withSuccessHandler(onDataLoaded)
+                .withFailureHandler(err => alert('Failed to load data: ' + err.message))
+                .getSetupPageData();
+        }
+
+        function onDataLoaded(data) {
+            console.log("Data loaded successfully.", data);
+
+            // 1. Load Tiles
+            tilesData = parseCSV(data.tileCsv || '');
+            if (csvHeader.length > 0) {
+                createEditorForm(csvHeader);
+                updateEditorPanel(null);
+            }
+            
+            // 2. Load Global Styles
+            const parsedStyles = parseStyleCSV(data.styleCsv || '');
+            Object.assign(globalStyles, parsedStyles);
+            populateGlobalStyleEditor();
+            if (globalStyles['Board Image URL']) {
+                boardImage.src = globalStyles['Board Image URL'];
+            }
+
+            // 3. Load Security & Teams
+            securityConfig = data.securityConfig || { adminPass: '', teams: [] };
+            populateSecurityEditor();
+
+            // 4. Render and Update UI
+            renderTiles();
+            updateCsvOutput();
+            updateStyleCsvOutput();
+        }
+
+        function saveDataToSheet() {
+            saveDataBtn.disabled = true;
+            saveDataBtn.textContent = 'Saving...';
+
+            const payload = {
+                tileCsv: generateCSV(csvHeader, tilesData),
+                styleCsv: generateStyleCSV(),
+                securityConfig: collectSecurityData()
+            };
+
+            google.script.run
+                .withSuccessHandler(() => {
+                    saveDataBtn.disabled = false;
+                    saveDataBtn.textContent = 'Save All Changes to Sheet';
+                    alert('All changes saved successfully!');
+                })
+                .withFailureHandler(err => {
+                    saveDataBtn.disabled = false;
+                    saveDataBtn.textContent = 'Save All Changes to Sheet';
+                    alert('Error saving changes: ' + err.message);
+                })
+                .saveSetupPageData(payload);
+        }
+
+        function populateSecurityEditor() {
+            // Don't pre-fill the admin password for security
+            document.getElementById('admin-password').value = '';
+
+            const teamsContainer = document.getElementById('teams-container');
+            teamsContainer.innerHTML = '';
+            if (securityConfig.teams) {
+                securityConfig.teams.forEach(team => addTeamRow(team.name));
+            }
+        }
+
+        function addTeamRow(name = '') {
+            const container = document.getElementById('teams-container');
+            const item = document.createElement('div');
+            item.className = 'team-item';
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'team-name';
+            nameInput.placeholder = 'Team Name';
+            nameInput.value = name;
+
+            const passInput = document.createElement('input');
+            passInput.type = 'text';
+            passInput.className = 'team-password';
+            passInput.placeholder = 'New Password (or leave blank)';
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-team-btn';
+            removeBtn.textContent = 'Remove';
+            removeBtn.onclick = () => item.remove();
+
+            item.append(nameInput, passInput, removeBtn);
+            container.appendChild(item);
+        }
+
+        function collectSecurityData() {
+            const teams = [];
+            document.querySelectorAll('.team-item').forEach(item => {
+                const name = item.querySelector('.team-name').value.trim();
+                const password = item.querySelector('.team-password').value; // Don't trim password
+                if (name) {
+                    teams.push({ name, password });
+                }
+            });
+            return {
+                adminPass: document.getElementById('admin-password').value,
+                teams: teams
+            };
+        }
+
+        passwordForm.addEventListener('submit', checkPassword);
+        saveDataBtn.addEventListener('click', saveDataToSheet);
+        document.getElementById('add-team-btn').addEventListener('click', () => addTeamRow());
+
+        createGlobalStyleEditorForm();
+        populateGlobalStyleEditor();
+        updateStyleCsvOutput();
+        toggleGlobalStyles(); // Start with the panel minimized
+        createStylePreviewButtons();
+
+    </script>
+</body>
+</html>
