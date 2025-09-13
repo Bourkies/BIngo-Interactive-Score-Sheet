@@ -415,10 +415,10 @@
 <div id="main-content" style="display: none;">
     <div class="navbar">
         <div class="nav-links">
-            <a href="<?= ScriptApp.getService().getUrl() ?>">Player View</a>
-            <a href="<?= ScriptApp.getService().getUrl() ?>?page=overview">Overview</a>
-            <a href="<?= ScriptApp.getService().getUrl() ?>?page=admin">Admin View</a>
-            <a href="<?= ScriptApp.getService().getUrl() ?>?page=Setup" class="active">Board Setup</a>
+            <a href="<?= ScriptApp.getService().getUrl() ?>" target="_top">Player View</a>
+            <a href="<?= ScriptApp.getService().getUrl() ?>?page=overview" target="_top">Overview</a>
+            <a href="<?= ScriptApp.getService().getUrl() ?>?page=admin" target="_top">Admin View</a>
+            <a href="<?= ScriptApp.getService().getUrl() ?>?page=setup" target="_top" class="active">Board Setup</a>
         </div>
     </div>
     <h1>Bingo Board Setup</h1>
@@ -729,6 +729,34 @@
                 const shape = (getProp('Default Tile Shape') || 'Square').toLowerCase();
                 const clipPaths = { 'ellipse': 'ellipse(50% 50% at 50% 50%)', 'circle': 'ellipse(50% 50% at 50% 50%)', 'diamond': 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', 'triangle': 'polygon(50% 0%, 0% 100%, 100% 100%)', 'hexagon': 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' };
                 if (clipPaths[shape]) tileEl.style.clipPath = clipPaths[shape];
+
+                // --- Stamp Logic ---
+                const useStamp = (String(getProp(`Use Stamp by Default (${status})`)) || 'FALSE').toUpperCase() === 'TRUE';
+                const stampUrl = getProp(`Stamp Image (${status})`);
+
+                if (useStamp && stampUrl) {
+                    const scale = getProp(`Stamp Scale (${status})`) || '1';
+                    const rotation = getProp(`Stamp Rotation (${status})`) || '0deg';
+                    const position = getProp(`Stamp Position (${status})`) || 'center';
+
+                    tileEl.textContent = ''; // Clear ID/Name text when stamp is shown
+                    const stampEl = document.createElement('div'); // Use a DIV for more reliable background positioning
+                    stampEl.style.position = 'absolute';
+                    stampEl.style.width = '100%';
+                    stampEl.style.height = '100%';
+                    stampEl.style.left = '0';
+                    stampEl.style.top = '0';
+                    stampEl.style.pointerEvents = 'none';
+                    stampEl.style.zIndex = '1';
+
+                    stampEl.style.backgroundImage = `url('${stampUrl}')`;
+                    stampEl.style.backgroundRepeat = 'no-repeat';
+                    stampEl.style.backgroundSize = 'contain';
+                    stampEl.style.backgroundPosition = position;
+                    stampEl.style.transformOrigin = position;
+                    stampEl.style.transform = `scale(${scale}) rotate(${rotation})`;
+                    tileEl.appendChild(stampEl);
+                }
 
                 tileEl.addEventListener('mouseover', () => {
                     const hoverWidth = getProp('Hover Tile Border Width') || '3px';
@@ -1692,6 +1720,16 @@
             
             // 2. Load Global Styles
             const parsedStyles = parseStyleCSV(data.styleCsv || '');
+            // Normalize boolean-like values to uppercase to handle inconsistencies from the sheet
+            for (const key in parsedStyles) {
+                if (Object.prototype.hasOwnProperty.call(parsedStyles, key)) {
+                    const isBooleanLike = ['Show Tile Names', 'Unlock on Verified Only', 'Show Scoreboard'].includes(key) || key.startsWith('Use Stamp by Default');
+                    if (isBooleanLike) {
+                        const upperValue = String(parsedStyles[key]).toUpperCase();
+                        if (upperValue === 'TRUE' || upperValue === 'FALSE') parsedStyles[key] = upperValue;
+                    }
+                }
+            }
             Object.assign(globalStyles, parsedStyles);
             populateGlobalStyleEditor();
             const imageUrl = globalStyles['Bingo Board Image'] || '';
