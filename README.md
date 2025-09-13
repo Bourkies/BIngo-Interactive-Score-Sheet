@@ -41,6 +41,7 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | Show Scoreboard | TRUE | Sets if the scoreboard is displayed. |
 | Load First Team by Default | TRUE | Set to TRUE to automatically load the first team's board. Set to FALSE to require users to select a team first. |
 | Bingo Board Image | *Paste your image link here* | Image or GIF link to your bingo board (Supports direct links, Imgur, and Google Drive links). |
+|  |  |  | 
 | **Tile Status Colors** |  |  |
 | Tile Locked | \#808080 | Hex colour code for the tile status. |
 | Tile Unlocked | \#FFFF00 | Hex colour code for the tile status. |
@@ -48,6 +49,7 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | Tile Submitted | \#00FF00 | Hex colour code for the tile status. |
 | Tile Verified | \#0000FF | Hex colour code for the tile status. |
 | Tile Requires Action | \#9932CC | Hex colour code for the tile status. |
+|  |  |  |
 | **Tile Status Opacity** |  |  |
 | Locked Opacity | 0.1 | Tile status opacity level from 0 (transparent) to 1 (opaque). |
 | Unlocked Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
@@ -55,38 +57,45 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | Submitted Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
 | Verified Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
 | Requires Action Opacity | 0.1 | Tile status opacity level from 0 to 1\. |
+|  |  |  |
 | **Default Tile Styling** |  |  |
 | Default Tile Shape | Square | Default shape for all tiles. Options: Square, Circle, Diamond, Triangle, Hexagon. |
 | Default Tile Border Width | 2px | Default border thickness for tiles (e.g., 2px, 0.5rem). |
 | Default Tile Border Color | transparent | Default border color for tiles (e.g., transparent, \#FFFFFF, blue). |
 | Hover Tile Border Width | 3px | Border thickness when hovering over a tile. |
 | Hover Tile Border Color | \#00b8d4 | Border color when hovering over a tile. |
+|  |  |  |
 | **Stamp Image Settings** |  | **Optional:** Add a "stamp" image on top of tiles based on their status. |
 | Use Stamp by Default (Locked) | FALSE | Master switch (TRUE/FALSE) to show the 'Locked' stamp by default. |
 | Stamp Image (Locked) |  | URL for the stamp image for 'Locked' tiles. |
 | Stamp Scale (Locked) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
 | Stamp Rotation (Locked) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
 | Stamp Position (Locked) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+|  |  |  |
 | Use Stamp by Default (Unlocked) | FALSE | Master switch (TRUE/FALSE) to show the 'Unlocked' stamp by default. |
 | Stamp Image (Unlocked) |  | URL for the stamp image for 'Unlocked' tiles. |
 | Stamp Scale (Unlocked) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
 | Stamp Rotation (Unlocked) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
 | Stamp Position (Unlocked) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+|  |  |  |
 | Use Stamp by Default (Partially Complete) | FALSE | Master switch (TRUE/FALSE) to show the 'Partially Complete' stamp by default. |
 | Stamp Image (Partially Complete) |  | URL for the stamp image for 'Partially Complete' tiles. |
 | Stamp Scale (Partially Complete) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
 | Stamp Rotation (Partially Complete) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
 | Stamp Position (Partially Complete) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+|  |  |  |
 | Use Stamp by Default (Submitted) | FALSE | Master switch (TRUE/FALSE) to show the 'Submitted' stamp by default. |
 | Stamp Image (Submitted) |  | URL for the stamp image for 'Submitted' tiles. |
 | Stamp Scale (Submitted) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
 | Stamp Rotation (Submitted) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
 | Stamp Position (Submitted) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+|  |  |  |
 | Use Stamp by Default (Verified) | FALSE | Master switch (TRUE/FALSE) to show the 'Verified' stamp by default. |
 | Stamp Image (Verified) |  | URL for the stamp image for 'Verified' tiles. |
 | Stamp Scale (Verified) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
 | Stamp Rotation (Verified) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
 | Stamp Position (Verified) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+|  |  |  |
 | Use Stamp by Default (Requires Action) | FALSE | Master switch (TRUE/FALSE) to show the 'Requires Action' stamp by default. |
 | Stamp Image (Requires Action) |  | URL for the stamp image for 'Requires Action' tiles. |
 | Stamp Scale (Requires Action) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
