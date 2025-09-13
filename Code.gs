@@ -9,8 +9,8 @@ function doGet(e) {
     template = HtmlService.createTemplateFromFile('overview');
   } else if (e.parameter.page === 'admin') {
     template = HtmlService.createTemplateFromFile('admin');
-  } else if (e.parameter.page === 'Setup') {
-    template = HtmlService.createTemplateFromFile('Setup');
+  } else if (e.parameter.page === 'setup') {
+    template = HtmlService.createTemplateFromFile('setup');
   } else {
     template = HtmlService.createTemplateFromFile('index');
   }
