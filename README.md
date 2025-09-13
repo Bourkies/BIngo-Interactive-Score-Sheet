@@ -62,12 +62,37 @@ This sheet controls the overall settings for your bingo board. Click and copy th
 | Hover Tile Border Width | 3px | Border thickness when hovering over a tile. |
 | Hover Tile Border Color | \#00b8d4 | Border color when hovering over a tile. |
 | **Stamp Image Settings** |  | **Optional:** Add a "stamp" image on top of tiles based on their status. |
+| Use Stamp by Default (Locked) | FALSE | Master switch (TRUE/FALSE) to show the 'Locked' stamp by default. |
+| Stamp Image (Locked) |  | URL for the stamp image for 'Locked' tiles. |
+| Stamp Scale (Locked) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
+| Stamp Rotation (Locked) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
+| Stamp Position (Locked) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+| Use Stamp by Default (Unlocked) | FALSE | Master switch (TRUE/FALSE) to show the 'Unlocked' stamp by default. |
+| Stamp Image (Unlocked) |  | URL for the stamp image for 'Unlocked' tiles. |
+| Stamp Scale (Unlocked) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
+| Stamp Rotation (Unlocked) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
+| Stamp Position (Unlocked) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+| Use Stamp by Default (Partially Complete) | FALSE | Master switch (TRUE/FALSE) to show the 'Partially Complete' stamp by default. |
+| Stamp Image (Partially Complete) |  | URL for the stamp image for 'Partially Complete' tiles. |
+| Stamp Scale (Partially Complete) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
+| Stamp Rotation (Partially Complete) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
+| Stamp Position (Partially Complete) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+| Use Stamp by Default (Submitted) | FALSE | Master switch (TRUE/FALSE) to show the 'Submitted' stamp by default. |
+| Stamp Image (Submitted) |  | URL for the stamp image for 'Submitted' tiles. |
+| Stamp Scale (Submitted) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
+| Stamp Rotation (Submitted) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
+| Stamp Position (Submitted) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
 | Use Stamp by Default (Verified) | FALSE | Master switch (TRUE/FALSE) to show the 'Verified' stamp by default. |
 | Stamp Image (Verified) |  | URL for the stamp image for 'Verified' tiles. |
 | Stamp Scale (Verified) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
 | Stamp Rotation (Verified) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
 | Stamp Position (Verified) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
-| ... | ... | ...You can add Stamp settings for any status: (Partially Complete), (Unlocked), etc. |
+| Use Stamp by Default (Requires Action) | FALSE | Master switch (TRUE/FALSE) to show the 'Requires Action' stamp by default. |
+| Stamp Image (Requires Action) |  | URL for the stamp image for 'Requires Action' tiles. |
+| Stamp Scale (Requires Action) | 1 | Size of the stamp. 1 is original size, 0.5 is half, 2 is double. |
+| Stamp Rotation (Requires Action) | 0deg | Rotation of the stamp (e.g., 15deg, \-10deg). |
+| Stamp Position (Requires Action) | center | Position of the stamp. Use CSS values like center, top right, 50% 50%. |
+
 
 
 ### **Step 4: Populate the 'Tiles' Tab**
