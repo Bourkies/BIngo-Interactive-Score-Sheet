@@ -163,7 +163,9 @@ function getTileDetails(tileId, teamName) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const submissionsSheet = ss.getSheetByName('Submissions');
     if (!submissionsSheet) return null;
-    const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
+    const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
+    // Filter out archived submissions
+    const submissions = allSubmissions.filter(s => s.IsArchived !== true);
     
     const sub = submissions.slice().reverse().find(s => s['TileID'] === tileId && s['Team'] === teamName);
 
@@ -200,7 +202,9 @@ function getLatestTeamData() {
         return acc;
     }, {});
 
-    const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
+    const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
+    // Filter out archived submissions from all calculations
+    const submissions = allSubmissions.filter(s => s.IsArchived !== true);
     const teamNamesList = String(config['Team Names'] || '').split(',').map(t => t.trim());
     const teamData = {};
     teamNamesList.forEach(name => {
@@ -269,6 +273,7 @@ function submitOrUpdateTile(submissionData) {
     const { list: headers, map: headerMap } = getHeaders(submissionsSheet);
     const submissions = submissionsSheet.getDataRange().getValues();
     let rowIndex = -1;
+    const isArchivedColIndex = headerMap['IsArchived'] ? headerMap['IsArchived'] - 1 : -1;
 
     const teamColIndex = headerMap['Team'] - 1;
     const tileIdColIndex = headerMap['TileID'] - 1;
@@ -279,6 +284,8 @@ function submitOrUpdateTile(submissionData) {
 
     // Search backwards for the most recent entry
     for (let i = submissions.length - 1; i >= 1; i--) {
+      // Player cannot update an archived submission
+      if (isArchivedColIndex !== -1 && submissions[i][isArchivedColIndex] === true) continue;
       if (submissions[i][teamColIndex] === submissionData.team && submissions[i][tileIdColIndex] === submissionData.tileId) {
         rowIndex = i + 1;
         existingRowValues = submissions[i];
@@ -308,6 +315,7 @@ function submitOrUpdateTile(submissionData) {
             case 'Admin Verified': return false; // Always false on player submission/update
             case 'IsComplete': return submissionData.isComplete;
             case 'RequiresAction': return submissionData.requiresAction;
+            case 'IsArchived': return false; // Never archived on submission
             default: return '';
         }
     });
@@ -387,8 +395,20 @@ function getAdminData(password) {
       return acc;
     }, {});
     
+    // --- NEW: Find duplicate submissions ---
+    // Only non-archived submissions can be part of a duplicate set to be resolved.
+    const nonArchivedSubmissions = submissions.filter(s => s.IsArchived !== true);
+    const groups = {};
+    nonArchivedSubmissions.forEach(sub => {
+      const key = `${sub.Team}-${sub.TileID}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(sub);
+    });
+
+    const duplicateGroups = Object.values(groups).filter(group => group.length > 1);
+
     // Return both submissions and the new tiles map
-    return { success: true, submissions: submissions.reverse(), tiles: tilesMap };
+    return { success: true, submissions: submissions.reverse(), tiles: tilesMap, duplicates: duplicateGroups };
 
   } catch (error) {
     Logger.log(`Error in getAdminData after password verification: ${error.stack}`);
@@ -426,7 +446,9 @@ function getOverviewData() {
         });
 
         // --- Process for Feed & Chart ---
-        const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
+        const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
+        const submissions = allSubmissions.filter(s => s.IsArchived !== true);
+
         const { data: tileObjects } = getSheetDataAsObjects(tilesSheet);
         const tileInfoMap = tileObjects.reduce((acc, row) => {
             if (row['TileID']) {
@@ -444,7 +466,7 @@ function getOverviewData() {
             .slice(0, 20)
             .map(s => ({
                 team: s['Team'],
-                tileId: s['TileID'],
+                tileId: s['TileID'], // This was already here, just confirming it's used in overview.html
                 tileName: tileInfoMap[s['TileID']] ? tileInfoMap[s['TileID']].name : 'Unknown',
                 timestamp: new Date(s['Timestamp']).toLocaleString(),
                 status: s['Admin Verified'] ? 'Verified' : 'Completed'
@@ -487,7 +509,16 @@ function getOverviewData() {
             chartDataPoints.push(dataPoint);
         });
 
-        return { success: true, feed: feedItems, leaderboard: leaderboard, chartData: chartDataPoints, config: { pageTitle: config['Page Title'], teamNames: teamNamesList } };
+        const frontendConfig = {
+            pageTitle: config['Page Title'],
+            teamNames: teamNamesList,
+            scoreOnVerifiedOnly: config['Score on Verified Only'] !== false
+        };
+
+        // Make sure overviewDataCache.config.scoreOnVerifiedOnly is available
+        return { 
+            success: true, feed: feedItems, leaderboard: leaderboard, chartData: chartDataPoints, config: frontendConfig 
+        };
     } catch (e) {
         Logger.log(e.stack);
         return { success: false, error: e.message };
@@ -546,6 +577,62 @@ function updateSubmissionStatus(updateData) {
   } catch (error) {
     Logger.log(`Error in updateSubmissionStatus after password verification: ${error.stack}`);
     return { success: false, message: 'An error occurred while updating the submission.' };
+  }
+}
+
+/**
+ * Archives duplicate submissions, keeping only one active.
+ * @param {object} data The payload from the client containing identifiers.
+ *                      { password: string, keepIdentifier: object, archiveIdentifiers: object[] }
+ */
+function archiveSubmissions(data) {
+  if (!verifyAdminPassword(data.password)) {
+    return { success: false, message: 'Invalid Admin Password.' };
+  }
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Submissions');
+    const { map: headerMap, list: headers } = getHeaders(sheet);
+
+    // Add 'IsArchived' header if it doesn't exist
+    let isArchivedCol = headerMap['IsArchived'];
+    if (!isArchivedCol) {
+      sheet.getRange(1, headers.length + 1).setValue('IsArchived');
+      isArchivedCol = headers.length + 1;
+    }
+
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+    const timestampCol = headerMap['Timestamp'] - 1;
+    const teamCol = headerMap['Team'] - 1;
+    const tileIdCol = headerMap['TileID'] - 1;
+
+    const archiveIds = new Set(data.archiveIdentifiers.map(id => `${new Date(id.Timestamp).toISOString()}-${id.Team}-${id.TileID}`));
+    const keepId = `${new Date(data.keepIdentifier.Timestamp).toISOString()}-${data.keepIdentifier.Team}-${data.keepIdentifier.TileID}`;
+
+    for (let i = 1; i < values.length; i++) { // Start at 1 to skip header
+      const row = values[i];
+      const rowId = `${new Date(row[timestampCol]).toISOString()}-${row[teamCol]}-${row[tileIdCol]}`;
+
+      if (archiveIds.has(rowId)) {
+        values[i][isArchivedCol - 1] = true;
+      } else if (rowId === keepId) {
+        values[i][isArchivedCol - 1] = false;
+      }
+    }
+
+    range.setValues(values);
+    
+    return { success: true, message: 'Duplicates resolved successfully.' };
+
+  } catch (e) {
+    Logger.log(`Error in archiveSubmissions: ${e.stack}`);
+    return { success: false, message: 'An error occurred: ' + e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 

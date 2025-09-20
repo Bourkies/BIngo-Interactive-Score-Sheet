@@ -58,6 +58,20 @@
       color: #111;
       font-weight: bold;
     }
+    /* --- NEW: Global Loader --- */
+    .global-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: linear-gradient(to right, var(--accent-color) 20%, #00d9f5 50%, var(--accent-color) 80%);
+        background-size: 200% auto;
+        animation: loading-animation 1.5s linear infinite;
+        z-index: 9999;
+        display: none; /* Hidden by default */
+    }
+    @keyframes loading-animation { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .container {
       width: 100%;
       max-width: 1200px;
@@ -110,18 +124,61 @@
         margin-bottom: 2rem;
         display: flex;
         flex-wrap: wrap;
-        gap: 1rem;
+        gap: 1.5rem;
         align-items: center;
     }
-    .filters label { font-weight: bold; }
-    .filters .status-filter { display: flex; gap: 0.5rem; align-items: center; }
+    .filters .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .filters .filter-group label { font-weight: bold; }
+    .filters input[type="text"], .filters select {
+        padding: 0.5rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--primary-text);
+    }
+    /* --- NEW: Duplicates Panel Styles --- */
+    #duplicates-panel {
+        background-color: var(--surface-color);
+        border: 1px solid var(--error-color);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    #duplicates-panel h2 {
+        margin-top: 0;
+        color: var(--error-color);
+    }
+    .duplicate-group {
+        border-top: 1px solid var(--border-color);
+        padding: 1rem 0;
+    }
+    .duplicate-group:first-child {
+        border-top: none;
+        padding-top: 0;
+    }
+    .duplicate-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.5rem;
+        border-radius: 4px;
+    }
+    .duplicate-item:hover {
+        background-color: rgba(255,255,255,0.05);
+    }
+    .duplicate-item label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+    .duplicate-item .status { font-style: italic; color: var(--secondary-text); }
     .table-wrapper { overflow-x: auto; }
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 1rem;
     }
-    th, td {
+    td {
       padding: 0.75rem 1rem;
       text-align: left;
       border-bottom: 1px solid var(--border-color);
@@ -129,6 +186,15 @@
     th {
       background-color: #3a3a3a;
       font-weight: bold;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+      cursor: pointer;
+      user-select: none;
+    }
+    th .sort-indicator {
+        color: var(--accent-color);
+        font-size: 0.8em;
     }
     tbody tr {
       cursor: pointer;
@@ -197,6 +263,8 @@
   </style>
 </head>
 <body>
+  <div id="global-loader" class="global-loader"></div>
+
   <div id="login-view" class="container">
     <h1>Admin Login</h1>
     <form id="login-form" onsubmit="handleLogin(event)">
@@ -222,35 +290,51 @@
     </div>
     <div class="container">
       <h1>Admin Verification</h1>
+      <div id="duplicates-panel" style="display: none;">
+        <h2>Resolve Duplicate Submissions</h2>
+        <p>The following tiles have multiple entries from the same team. Select the one submission to keep as the official record for each group. The others will be archived and will no longer affect scores or tile status.</p>
+        <div id="duplicates-container"></div>
+      </div>
+
       <div class="filters">
-        <label>Filter by Status:</label>
-        <div class="status-filter">
-          <input type="checkbox" id="filter-submitted" onchange="renderTable()" checked>
-          <label for="filter-submitted">Submitted</label>
+        <div class="filter-group">
+          <label for="filter-search">Search:</label>
+          <input type="text" id="filter-search" oninput="renderTable()" placeholder="Filter by keyword...">
         </div>
-        <div class="status-filter">
-          <input type="checkbox" id="filter-action" onchange="renderTable()" checked>
-          <label for="filter-action">Requires Action</label>
+        <div class="filter-group">
+          <label for="filter-team">Team:</label>
+          <select id="filter-team" onchange="renderTable()"></select>
         </div>
-        <div class="status-filter">
-          <input type="checkbox" id="filter-partial" onchange="renderTable()">
-          <label for="filter-partial">Partially Complete</label>
-        </div>
-        <div class="status-filter">
-          <input type="checkbox" id="filter-verified" onchange="renderTable()">
-          <label for="filter-verified">Verified</label>
+        <div class="filter-group">
+          <label>Status:</label>
+          <div class="filter-group">
+            <input type="checkbox" id="filter-submitted" onchange="renderTable()" checked>
+            <label for="filter-submitted">Submitted</label>
+          </div>
+          <div class="filter-group">
+            <input type="checkbox" id="filter-action" onchange="renderTable()" checked>
+            <label for="filter-action">Requires Action</label>
+          </div>
+          <div class="filter-group">
+            <input type="checkbox" id="filter-partial" onchange="renderTable()">
+            <label for="filter-partial">Partially Complete</label>
+          </div>
+          <div class="filter-group">
+            <input type="checkbox" id="filter-verified" onchange="renderTable()">
+            <label for="filter-verified">Verified</label>
+          </div>
         </div>
       </div>
       <div class="table-wrapper">
         <table id="submissions-table">
           <thead>
             <tr>
-              <th>Timestamp</th>
-              <th>Team</th>
-              <th>Tile ID</th>
-              <th>Tile Name</th>
-              <th>Player(s)</th>
-              <th>Status</th>
+              <th data-column="Timestamp">Timestamp<span class="sort-indicator"></span></th>
+              <th data-column="Team">Team<span class="sort-indicator"></span></th>
+              <th data-column="TileID">Tile ID<span class="sort-indicator"></span></th>
+              <th data-column="TileName">Tile Name<span class="sort-indicator"></span></th>
+              <th data-column="PlayerName">Player(s)<span class="sort-indicator"></span></th>
+              <th data-column="Status">Status<span class="sort-indicator"></span></th>
             </tr>
           </thead>
           <tbody>
@@ -301,6 +385,8 @@
     let allSubmissions = [];
     let allTiles = {};
     let currentSubmission = null;
+    let duplicateGroups = [];
+    let currentSort = { column: 'Timestamp', direction: 'desc' }; // Default sort
 
     function handleLogin(event) {
       event.preventDefault();
@@ -311,53 +397,94 @@
       loginButton.disabled = true;
       loginButton.textContent = 'Verifying...';
       errorP.textContent = '';
+      showGlobalLoader();
       google.script.run
         .withSuccessHandler(response => {
             if (response && response.success) {
                 allSubmissions = response.submissions;
                 allTiles = response.tiles; 
+                if (response.duplicates && response.duplicates.length > 0) {
+                    duplicateGroups = response.duplicates;
+                    renderDuplicatesPanel();
+                }
                 document.getElementById('login-view').style.display = 'none';
                 document.getElementById('admin-view').style.display = 'block';
+                populateTeamFilter();
+                addSortListeners();
                 renderTable();
             } else {
                 errorP.textContent = (response && response.message) ? response.message : 'Login failed.';
-                loginButton.disabled = false;
-                loginButton.textContent = 'Login';
             }
         })
         .withFailureHandler(error => {
             errorP.textContent = 'Error: ' + error.message;
+        })
+        .getAdminData(adminPassword)
+        .finally(() => {
+            hideGlobalLoader();
             loginButton.disabled = false;
             loginButton.textContent = 'Login';
-        })
-        .getAdminData(adminPassword);
+        });
     }
 
-    // NEW: Function to handle refresh button click
+    // NEW: Function to populate the team filter dropdown
+    function populateTeamFilter() {
+        const teams = [...new Set(allSubmissions.map(sub => sub.Team))];
+        const select = document.getElementById('filter-team');
+        select.innerHTML = '<option value="all">All Teams</option>';
+        teams.sort().forEach(team => {
+            const option = document.createElement('option');
+            option.value = team;
+            option.textContent = team;
+            select.appendChild(option);
+        });
+    }
+
+    // NEW: Function to add click listeners for sorting
+    function addSortListeners() {
+        document.querySelectorAll('#submissions-table thead th').forEach(th => {
+            th.addEventListener('click', () => {
+                const column = th.dataset.column;
+                if (column) {
+                    if (currentSort.column === column) {
+                        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.direction = 'asc';
+                    }
+                    renderTable();
+                }
+            });
+        });
+    }
+
+    // UPDATED: Refresh function
     function refreshAdminData() {
         const refreshButton = document.querySelector('.nav-actions button');
-        refreshButton.disabled = true;
-        refreshButton.textContent = 'Refreshing...';
-        showMessage('Refreshing data...', false);
+        showGlobalLoader();
 
         google.script.run
             .withSuccessHandler(response => {
                 if (response && response.success) {
                     allSubmissions = response.submissions;
                     allTiles = response.tiles;
+                    duplicateGroups = response.duplicates || [];
+                    if (duplicateGroups.length > 0) {
+                        renderDuplicatesPanel();
+                    } else {
+                        document.getElementById('duplicates-panel').style.display = 'none';
+                    }
+                    populateTeamFilter(); // Repopulate in case teams changed
                     renderTable();
                 } else {
                     showMessage((response && response.message) ? 'Refresh failed: ' + response.message : 'Refresh failed.', true);
                 }
-                refreshButton.disabled = false;
-                refreshButton.textContent = 'Refresh Data';
             })
             .withFailureHandler(error => {
                 showMessage('Error refreshing data: ' + error.message, true);
-                refreshButton.disabled = false;
-                refreshButton.textContent = 'Refresh Data';
             })
-            .getAdminData(adminPassword);
+            .getAdminData(adminPassword)
+            .finally(() => hideGlobalLoader());
     }
 
     function getStatus(sub) {
@@ -367,36 +494,188 @@
         return { text: 'Partially Complete', class: 'status-partial' };
     }
 
+    // NEW: Function to update sort indicators in table headers
+    function updateSortIndicators() {
+        document.querySelectorAll('#submissions-table thead th').forEach(th => {
+            const indicator = th.querySelector('.sort-indicator');
+            if (!indicator) return;
+            if (th.dataset.column === currentSort.column) {
+                indicator.textContent = currentSort.direction === 'asc' ? ' ▲' : ' ▼';
+            } else {
+                indicator.textContent = '';
+            }
+        });
+    }
+
+    // REWRITTEN: renderTable to include filtering and sorting
     function renderTable() {
       const tbody = document.querySelector('#submissions-table tbody');
       tbody.innerHTML = '';
+
+      // Get filter values
+      const teamFilter = document.getElementById('filter-team').value;
+      const searchTerm = document.getElementById('filter-search').value.toLowerCase();
       const showSubmitted = document.getElementById('filter-submitted').checked;
       const showAction = document.getElementById('filter-action').checked;
       const showPartial = document.getElementById('filter-partial').checked;
       const showVerified = document.getElementById('filter-verified').checked;
-      const filteredSubmissions = allSubmissions.filter(sub => {
+
+      // 1. Filter submissions (ignore archived ones for the main table)
+      let filteredSubmissions = allSubmissions.filter(sub => sub.IsArchived !== true).filter(sub => {
+        // Status filter
         const status = getStatus(sub).text;
-        if (status === 'Submitted' && showSubmitted) return true;
-        if (status === 'Requires Action' && showAction) return true;
-        if (status === 'Partially Complete' && showPartial) return true;
-        if (status === 'Verified' && showVerified) return true;
-        return false;
+        const statusMatch = (status === 'Submitted' && showSubmitted) ||
+                            (status === 'Requires Action' && showAction) ||
+                            (status === 'Partially Complete' && showPartial) ||
+                            (status === 'Verified' && showVerified);
+        if (!statusMatch) return false;
+
+        // Team filter
+        if (teamFilter !== 'all' && sub.Team !== teamFilter) return false;
+
+        // Search term filter
+        if (searchTerm) {
+            const tileName = (allTiles[sub.TileID] ? allTiles[sub.TileID].name : '').toLowerCase();
+            const searchIn = [
+                sub.Team.toLowerCase(),
+                sub.TileID.toLowerCase(),
+                tileName,
+                sub['Player Name'].toLowerCase()
+            ];
+            if (!searchIn.some(text => text.includes(searchTerm))) {
+                return false;
+            }
+        }
+        return true;
       });
+
+      // 2. Sort submissions
+      if (currentSort.column) {
+          filteredSubmissions.sort((a, b) => {
+              let valA, valB;
+              const col = currentSort.column;
+
+              if (col === 'Timestamp') { valA = new Date(a.Timestamp); valB = new Date(b.Timestamp); } 
+              else if (col === 'TileName') { valA = (allTiles[a.TileID] ? allTiles[a.TileID].name : '').toLowerCase(); valB = (allTiles[b.TileID] ? allTiles[b.TileID].name : '').toLowerCase(); } 
+              else if (col === 'PlayerName') { valA = (a['Player Name'] || '').toLowerCase(); valB = (b['Player Name'] || '').toLowerCase(); } 
+              else if (col === 'Status') { valA = getStatus(a).text.toLowerCase(); valB = getStatus(b).text.toLowerCase(); } 
+              else { valA = (a[col] || '').toLowerCase(); valB = (b[col] || '').toLowerCase(); }
+
+              let comparison = 0;
+              if (valA > valB) { comparison = 1; } 
+              else if (valA < valB) { comparison = -1; }
+              return currentSort.direction === 'asc' ? comparison : comparison * -1;
+          });
+      }
+
+      // 3. Render table
       if (filteredSubmissions.length === 0) {
         const row = tbody.insertRow();
         const cell = row.insertCell();
         cell.colSpan = 6;
         cell.textContent = 'No submissions match the current filters.';
         cell.style.textAlign = 'center';
-        return;
+      } else {
+        filteredSubmissions.forEach(sub => {
+          const row = tbody.insertRow();
+          row.onclick = () => openModal(sub);
+          const statusInfo = getStatus(sub);
+          const tileName = allTiles[sub.TileID] ? allTiles[sub.TileID].name : 'Unknown Tile';
+          row.innerHTML = `<td>${new Date(sub.Timestamp).toUTCString()}</td><td>${sub.Team}</td><td>${sub.TileID}</td><td>${tileName}</td><td>${sub['Player Name']}</td><td class="${statusInfo.class}">${statusInfo.text}</td>`;
+        });
       }
-      filteredSubmissions.forEach(sub => {
-        const row = tbody.insertRow();
-        row.onclick = () => openModal(sub);
-        const statusInfo = getStatus(sub);
-        const tileName = allTiles[sub.TileID] ? allTiles[sub.TileID].name : 'Unknown Tile';
-        row.innerHTML = `<td>${new Date(sub.Timestamp).toLocaleString()}</td><td>${sub.Team}</td><td>${sub.TileID}</td><td>${tileName}</td><td>${sub['Player Name']}</td><td class="${statusInfo.class}">${statusInfo.text}</td>`;
-      });
+      
+      updateSortIndicators();
+    }
+
+    // --- NEW: Functions for handling duplicates ---
+    function renderDuplicatesPanel() {
+        const panel = document.getElementById('duplicates-panel');
+        const container = document.getElementById('duplicates-container');
+        container.innerHTML = '';
+
+        if (!duplicateGroups || duplicateGroups.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+        panel.style.display = 'block';
+
+        duplicateGroups.forEach((group, index) => {
+            // Sort group by timestamp descending (newest first)
+            group.sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+
+            const groupKey = `${group[0].Team}-${group[0].TileID}`;
+            const tileId = group[0].TileID;
+            const tileName = allTiles[tileId]?.name || 'Unknown Tile';
+
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'duplicate-group';
+            groupDiv.innerHTML = `<h3>${tileId}: ${tileName} (Team: ${group[0].Team})</h3>`;
+
+            group.forEach((sub, subIndex) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'duplicate-item';
+                const radioId = `radio-${index}-${subIndex}`;
+                const status = getStatus(sub);
+
+                itemDiv.innerHTML = `
+                    <input type="radio" id="${radioId}" name="group-${groupKey}" value="${sub.Timestamp}" ${subIndex === 0 ? 'checked' : ''} />
+                    <label for="${radioId}">
+                        <strong>${new Date(sub.Timestamp).toUTCString()}</strong> by ${sub['Player Name']}
+                        <span class="status">(${status.text})</span>
+                    </label>
+                `;
+
+                const viewButton = document.createElement('button');
+                viewButton.textContent = 'View';
+                viewButton.style.marginLeft = 'auto'; // Push to the right
+                viewButton.style.marginTop = '0';
+                viewButton.style.padding = '4px 8px';
+                viewButton.style.fontSize = '14px';
+                viewButton.onclick = () => openModal(sub);
+
+                itemDiv.appendChild(viewButton);
+                groupDiv.appendChild(itemDiv);
+            });
+
+            const resolveButton = document.createElement('button');
+            resolveButton.textContent = 'Resolve This Group';
+            resolveButton.style.marginTop = '1rem';
+            resolveButton.onclick = (event) => resolveDuplicates(groupKey, event.target);
+            groupDiv.appendChild(resolveButton);
+
+            container.appendChild(groupDiv);
+        });
+    }
+
+    function resolveDuplicates(groupKey, buttonEl) {
+        const selectedTimestamp = document.querySelector(`input[name="group-${groupKey}"]:checked`).value;
+        const group = duplicateGroups.find(g => `${g[0].Team}-${g[0].TileID}` === groupKey);
+        if (!group) return;
+
+        buttonEl.disabled = true;
+        buttonEl.textContent = 'Resolving...';
+        showGlobalLoader();
+
+        const keepIdentifier = group.find(sub => sub.Timestamp === selectedTimestamp);
+        const archiveIdentifiers = group.filter(sub => sub.Timestamp !== selectedTimestamp);
+
+        const payload = { password: adminPassword, keepIdentifier, archiveIdentifiers };
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response && response.success) {
+                    showMessage('Duplicates resolved. Refreshing...', false);
+                    refreshAdminData();
+                } else { showMessage(response.message, true); }
+            })
+            .withFailureHandler(err => showMessage('Error: ' + err.message, true))
+            .archiveSubmissions(payload)
+            .finally(() => {
+                hideGlobalLoader();
+                buttonEl.disabled = false;
+                buttonEl.textContent = 'Resolve This Group';
+            });
     }
 
     function openModal(sub) {
@@ -455,7 +734,8 @@
       if (!currentSubmission) return;
       const updateButton = document.getElementById('update-button');
       updateButton.disabled = true;
-      updateButton.textContent = 'Updating...';
+      showGlobalLoader();
+
       const updateData = {
         password: adminPassword,
         timestamp: new Date(currentSubmission.Timestamp).toISOString(),
@@ -469,8 +749,7 @@
       google.script.run
         .withSuccessHandler(response => {
           updateButton.disabled = false;
-          updateButton.textContent = 'Update Submission';
-          if (response.success) {
+          if (response && response.success) {
             closeModal();
             showMessage('Submission updated successfully!', false);
             refreshAdminData(); // Refresh data after update
@@ -481,11 +760,19 @@
         .withFailureHandler(error => {
           showMessage('Update failed: ' + error.message, true);
           updateButton.disabled = false;
-          updateButton.textContent = 'Update Submission';
         })
-        .updateSubmissionStatus(updateData);
+        .updateSubmissionStatus(updateData)
+        .finally(() => hideGlobalLoader());
     }
     
+    // --- NEW: Global Loader Functions ---
+    function showGlobalLoader() {
+        document.getElementById('global-loader').style.display = 'block';
+    }
+    function hideGlobalLoader() {
+        document.getElementById('global-loader').style.display = 'none';
+    }
+
     // NEW: Message box function
     function showMessage(text, isError = false) {
       const box = document.getElementById('message-box');

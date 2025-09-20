@@ -1369,7 +1369,7 @@
                     fieldContainer.appendChild(label);
 
 
-                    if (prop.toLowerCase().includes('color')) {
+                    if (prop.toLowerCase().includes('color') || prop.startsWith('Tile ')) {
                         const compound = document.createElement('div');
                         compound.className = 'form-field-compound';
                         const colorInput = document.createElement('input');

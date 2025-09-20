@@ -46,6 +46,20 @@
       color: var(--text-dark);
       font-weight: bold;
     }
+    /* --- NEW: Global Loader --- */
+    .global-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: linear-gradient(to right, var(--accent-color) 20%, #00d9f5 50%, var(--accent-color) 80%);
+        background-size: 200% auto;
+        animation: loading-animation 1.5s linear infinite;
+        z-index: 9999;
+        display: none; /* Hidden by default */
+    }
+    @keyframes loading-animation { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .controls {
       width: 100%; margin-bottom: 1rem; display: flex; justify-content: space-between;
       align-items: center; flex-wrap: wrap; gap: 1rem;
@@ -146,7 +160,6 @@
         font-weight: normal; font-size: 0.9rem;
     }
     #add-evidence-btn:hover { background-color: rgba(0, 184, 212, 0.1); }
-    #loader { font-size: 1.2rem; }
     .error-message {
         padding: 2rem; background-color: var(--error-bg); border: 2px dashed var(--error-border);
         border-radius: 8px; text-align: center; width: 80%; word-wrap: break-word; position: absolute; z-index: 1;
@@ -184,6 +197,8 @@
   </style>
 </head>
 <body>
+  <div id="global-loader" class="global-loader"></div>
+
   <div class="navbar">
     <div class="nav-links">
       <a href="<?= ScriptApp.getService().getUrl() ?>" class="active">Player View</a>
@@ -202,7 +217,7 @@
     <select id="team-selector" onchange="handleTeamChange()"></select>
   </div>
   <div id="board-container">
-    <div id="loader">Loading board...</div>
+    <!-- Tiles will be rendered here -->
   </div>
   <div class="info-container">
     <div id="color-key-container"></div>
@@ -251,17 +266,17 @@
 
     // Function to handle refresh button click
     function refreshData() {
-      showMessage('Refreshing data...', false);
+      showGlobalLoader();
       pollForUpdates();
     }
 
     function fetchInitialData() {
-      document.getElementById('loader').style.display = 'block';
+      showGlobalLoader();
       google.script.run
         .withSuccessHandler(data => {
           if (data.error) {
-            showMessage(data.error, true);
-            document.getElementById('loader').style.display = 'none';
+            const container = document.getElementById('board-container');
+            container.innerHTML = `<div class="error-message">${data.error}</div>`;
             return;
           }
           boardDataCache = data;
@@ -275,29 +290,33 @@
           renderColorKey();
           renderScoreboard();
           document.getElementById('evidence-label').textContent = data.config.evidenceLabel;
-          document.getElementById('loader').style.display = 'none';
         })
         .withFailureHandler(error => {
-          showMessage('Failed to load board data: ' + error.message, true);
-          document.getElementById('loader').style.display = 'none';
+          const container = document.getElementById('board-container');
+          container.innerHTML = `<div class="error-message">Failed to load board data: ${error.message}</div>`;
         })
-        .getBoardData();
+        .getBoardData()
+        .finally(() => hideGlobalLoader());
     }
 
     function pollForUpdates() {
       google.script.run
         .withSuccessHandler(updateData => {
-          if (updateData && !updateData.error) {
+          hideGlobalLoader(); // Hide loader from the calling function (e.g., refreshData)
+          if (updateData && !updateData.error) { // Don't hide loader on error, let finally do it
             boardDataCache.teamData = updateData.teamData;
             boardDataCache.scoreboard = updateData.scoreboard;
             renderBoard();
             renderScoreboard();
           } else if (updateData && updateData.error) {
             console.error('Server returned an error during polling:', updateData.error);
+            showMessage('Refresh failed: ' + updateData.error, true);
           }
         })
         .withFailureHandler(error => {
+            hideGlobalLoader(); // Hide loader from the calling function
             console.error('Polling request failed:', error.message);
+            showMessage('Refresh failed: ' + error.message, true);
         })
         .getLatestTeamData();
     }
@@ -349,7 +368,7 @@
 
     function renderBoard() {
       if (!boardDataCache) {
-        document.getElementById('board-container').innerHTML = '<div id="loader" style="display: block;">Loading board data...</div>';
+        document.getElementById('board-container').innerHTML = '';
         return;
       }
 
@@ -599,7 +618,8 @@
     function handleFormSubmit(event) {
       event.preventDefault();
       const submitButton = document.getElementById('submit-button');
-      submitButton.disabled = true; submitButton.textContent = 'Submitting...';
+      submitButton.disabled = true;
+      showGlobalLoader();
 
       // --- NEW: Collect evidence data ---
       const evidenceItems = [];
@@ -624,21 +644,22 @@
       
       google.script.run
         .withSuccessHandler(response => {
-          if (response.success) {
+          if (response && response.success) { // On successful submission
+            hideGlobalLoader(); // Hide the loader from this submission action
             showMessage(response.message, false);
-            pollForUpdates();
+            pollForUpdates(); // This is a fire-and-forget refresh, it will manage its own loader state internally
             clearEvidenceInputs();
             closeModal();
-          } else {
-            showMessage(response.message, true);
-            submitButton.disabled = false;
-            submitButton.textContent = 'Save Progress';
+          } else { // On submission failure (e.g., wrong password)
+            hideGlobalLoader();
+            submitButton.disabled = false; // Re-enable the button to allow another attempt
+            showMessage(response ? response.message : 'An unknown error occurred.', true);
           }
         })
         .withFailureHandler(error => {
+          hideGlobalLoader();
+          submitButton.disabled = false; // Re-enable the button on script failure
           showMessage('Submission failed: ' + error.message, true);
-          submitButton.disabled = false;
-          submitButton.textContent = 'Save Progress';
         })
         .submitOrUpdateTile(submissionData);
     }
@@ -651,6 +672,14 @@
       setTimeout(() => box.classList.remove('show'), 4000);
     }
     
+    // --- NEW: Global Loader Functions ---
+    function showGlobalLoader() {
+        document.getElementById('global-loader').style.display = 'block';
+    }
+    function hideGlobalLoader() {
+        document.getElementById('global-loader').style.display = 'none';
+    }
+
     function hexToRgba(colorStr, alpha) {
         if (!colorStr || typeof colorStr !== 'string') return `rgba(255, 255, 255, ${alpha})`;
         const sColor = colorStr.trim();

@@ -77,6 +77,21 @@
             color: #111;
             font-weight: bold;
         }
+        /* --- NEW: Global Loader & Message Box --- */
+        .global-loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 3px;
+            background: linear-gradient(to right, var(--accent-color) 20%, #00d9f5 50%, var(--accent-color) 80%);
+            background-size: 200% auto;
+            animation: loading-animation 1.5s linear infinite;
+            z-index: 9999; display: none;
+        }
+        @keyframes loading-animation { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        #message-box {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background-color: #333; color: white; padding: 1rem 2rem; border-radius: 8px;
+            z-index: 2000; opacity: 0; transition: opacity 0.5s; pointer-events: none;
+        }
+        #message-box.show { opacity: 1; }
         h1, h2 {
             color: #00aaff;
             text-align: center;
@@ -400,6 +415,9 @@
     </style>
 </head>
 <body>
+<div id="global-loader" class="global-loader"></div>
+<div id="message-box"></div>
+
 <div id="password-overlay">
     <div class="password-box">
         <h2>Admin Access Required</h2>
@@ -1474,7 +1492,7 @@
                     fieldContainer.appendChild(label);
 
 
-                    if (prop.toLowerCase().includes('color')) {
+                    if (prop.toLowerCase().includes('color') || prop.startsWith('Tile ')) {
                         const compound = document.createElement('div');
                         compound.className = 'form-field-compound';
                         const colorInput = document.createElement('input');
@@ -1654,6 +1672,7 @@
             passwordInput.disabled = true;
             event.target.querySelector('button').disabled = true;
 
+            showGlobalLoader();
             // This will call your server-side Apps Script function
             google.script.run
                 .withSuccessHandler(isValid => {
@@ -1667,6 +1686,7 @@
                         passwordInput.disabled = false;
                         event.target.querySelector('button').disabled = false;
                     }
+                    hideGlobalLoader();
                 })
                 .withFailureHandler(err => {
                     errorEl.textContent = 'Error: ' + err.message;
@@ -1674,43 +1694,31 @@
                     passwordInput.disabled = false;
                     event.target.querySelector('button').disabled = false;
                 })
-                .verifyAdminPassword(password);
+                .verifyAdminPassword(password)
+                .finally(() => hideGlobalLoader());
         }
 
         function loadDataFromSheet() {
             console.log("Loading configuration from Google Sheet...");
-            const loadBtn = document.getElementById('load-data-btn');
-            const saveBtn = document.getElementById('save-data-btn');
-            if (loadBtn) {
-                loadBtn.disabled = true;
-                loadBtn.textContent = 'Loading...';
-            }
-            if (saveBtn) saveBtn.disabled = true;
+            document.getElementById('load-data-btn').disabled = true;
+            document.getElementById('save-data-btn').disabled = true;
+            showGlobalLoader();
 
             google.script.run
                 .withSuccessHandler(onDataLoaded)
                 .withFailureHandler(err => {
-                    alert('Failed to load data: ' + err.message);
-                    if (loadBtn) {
-                        loadBtn.disabled = false;
-                        loadBtn.textContent = 'Load from Sheet';
-                    }
-                    if (saveBtn) saveBtn.disabled = false;
+                    showMessage('Failed to load data: ' + err.message, true);
                 })
-                .getSetupPageData();
+                .getSetupPageData()
+                .finally(() => {
+                    hideGlobalLoader();
+                    document.getElementById('load-data-btn').disabled = false;
+                    document.getElementById('save-data-btn').disabled = false;
+                });
         }
 
         function onDataLoaded(data) {
             console.log("Data loaded successfully.", data);
-            const loadBtn = document.getElementById('load-data-btn');
-            const saveBtn = document.getElementById('save-data-btn');
-            if (loadBtn) {
-                loadBtn.disabled = false;
-                loadBtn.textContent = 'Load from Sheet';
-            }
-            if (saveBtn) {
-                saveBtn.disabled = false;
-            }
             // 1. Load Tiles
             tilesData = parseCSV(data.tileCsv || '');
             if (csvHeader.length > 0) {
@@ -1747,8 +1755,8 @@
         }
 
         function saveDataToSheet() {
-            saveDataBtn.disabled = true;
-            saveDataBtn.textContent = 'Saving...';
+            document.getElementById('save-data-btn').disabled = true;
+            showGlobalLoader();
 
             const payload = {
                 tileCsv: generateCSV(csvHeader, tilesData),
@@ -1758,16 +1766,16 @@
 
             google.script.run
                 .withSuccessHandler(() => {
-                    saveDataBtn.disabled = false;
-                    saveDataBtn.textContent = 'Save All Changes to Sheet';
-                    alert('All changes saved successfully!');
+                    showMessage('All changes saved successfully!', false);
                 })
                 .withFailureHandler(err => {
-                    saveDataBtn.disabled = false;
-                    saveDataBtn.textContent = 'Save All Changes to Sheet';
-                    alert('Error saving changes: ' + err.message);
+                    showMessage('Error saving changes: ' + err.message, true);
                 })
-                .saveSetupPageData(payload);
+                .saveSetupPageData(payload)
+                .finally(() => {
+                    hideGlobalLoader();
+                    document.getElementById('save-data-btn').disabled = false;
+                });
         }
 
         function populateSecurityEditor() {
@@ -1830,6 +1838,22 @@
             }
         });
         document.getElementById('add-team-btn').addEventListener('click', () => addTeamRow());
+
+        // --- NEW: Global Loader & Message Box Functions ---
+        function showGlobalLoader() {
+            document.getElementById('global-loader').style.display = 'block';
+        }
+        function hideGlobalLoader() {
+            document.getElementById('global-loader').style.display = 'none';
+        }
+        function showMessage(text, isError = false) {
+            const box = document.getElementById('message-box');
+            box.textContent = text;
+            box.style.backgroundColor = isError ? '#c0392b' : '#27ae60';
+            box.classList.add('show');
+            setTimeout(() => box.classList.remove('show'), 4000);
+        }
+
 
         createGlobalStyleEditorForm();
         populateGlobalStyleEditor();

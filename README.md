@@ -128,11 +128,12 @@ This sheet will automatically log all player submissions. **You must add the `Co
 *   **CompletionTimestamp:** Automatically populated when a tile is first marked as "complete". This is used for the time-series chart on the Overview page.
 *   **Evidence Column:** This column stores submission evidence as a JSON string, which allows players to submit multiple pieces of evidence (each with a link and a name) for a single tile. For example: `[{"link":"https://...","name":"First proof"}]`.
 *   **Admin Verification:** Admins verify tiles by setting the “Admin Verified” value of a submission to “TRUE” in the Admin Page or directly in the sheet.
+*   **IsArchived:** Set to TRUE to ignore this submission entry across the entire application. This is useful for resolving duplicate entries via the Admin page.
 
 
-| A | B | C | D | E | F | G | H | I | J |
-| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
-| **Timestamp** | **CompletionTimestamp** | **Player Name** | **Team** | **TileID** | **Evidence** | **Notes** | **Admin Verified** | **IsComplete** | **RequiresAction** |
+| A | B | C | D | E | F | G | H | I | J | K |
+| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
+| **Timestamp** | **CompletionTimestamp** | **Player Name** | **Team** | **TileID** | **Evidence** | **Notes** | **Admin Verified** | **IsComplete** | **RequiresAction** | **IsArchived** |
 
 ## **Part 2: Setting Up The Google Apps Script**
 
