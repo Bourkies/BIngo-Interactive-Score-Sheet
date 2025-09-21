@@ -167,6 +167,16 @@ This script connects your sheet to the web app.
    * You may see a screen saying "Google hasn't verified this app". This is normal for personal scripts. Click "Advanced", then "Go to (your project name)".
 5. Share the new Web app URL with your players.
 
+## **Known Issues**
+
+**"Sorry, unable to open the file" Error**
+
+If you see a "Sorry, unable to open the file" error, it's a common issue with multiple Google logins. Please use one of these simple fixes:
+
+*   **Recommended:** Copy the link and open it in a new Incognito or Private browser window.
+*   **Alternatively:** Before clicking the link, sign out of all your Google accounts except for one.
+*   **For Container Users:** If you use browser containers (like Firefox's Multi-Account Containers), open the link in a container that has only one or less Google accounts logged in.
+
 ## **Part 3: How to Use**
 
 All pages contain a navigation bar at the top to easily switch between the Player, Overview, and Admin views.

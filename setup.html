@@ -168,6 +168,7 @@
             cursor: move;
             touch-action: none;
             user-select: none;
+            z-index: 1; /* To be under the prerequisite lines */
             padding: 2px;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -245,6 +246,24 @@
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+        .prereq-vis-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .prereq-vis-control select {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        #prereq-lines-svg {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; z-index: 5;
+            overflow: visible;
         }
         /* Details Panel Styles */
         .details-panel {
@@ -486,6 +505,13 @@
             <span id="zoom-value">100%</span>
             <button id="reset-zoom">Reset</button>
         </div>
+        <div class="prereq-vis-control">
+            <label for="prereq-vis-mode">Prerequisite Lines:</label>
+            <select id="prereq-vis-mode">
+                <option value="hide" selected>Hidden</option>
+                <option value="selected">Show for Selected</option>
+            </select>
+        </div>
     </div>
 
     <div class="container">
@@ -494,6 +520,7 @@
             <div id="board-container">
                 <div id="board-content">
                     <img id="board-image" src="" alt="Bingo board background" style="visibility: hidden;" />
+                    <svg id="prereq-lines-svg"></svg>
                     <!-- Tiles will be injected here -->
                 </div>
             </div>
@@ -564,6 +591,7 @@
         let lastSelectedTileIndex = null;
         let currentPreviewStatus = null;
         const STATUSES = ['Locked', 'Unlocked', 'Partially Complete', 'Submitted', 'Verified', 'Requires Action'];
+        let prereqVisMode = 'hide';
         
         let globalStyles = {
             // Board Config
@@ -681,6 +709,8 @@
         const toggleGlobalStylesBtn = document.getElementById('toggle-global-styles-btn');
         const toggleSecurityBtn = document.getElementById('toggle-security-btn');
         const passwordForm = document.getElementById('password-form');
+        const prereqVisModeSelect = document.getElementById('prereq-vis-mode');
+        const prereqLinesSvg = document.getElementById('prereq-lines-svg');
         const mainContent = document.getElementById('main-content');
         const passwordOverlay = document.getElementById('password-overlay');
 
@@ -743,6 +773,9 @@
                 tileEl.classList.add('draggable-tile');
                 if (lastSelectedTileIndex === index) {
                     tileEl.style.borderColor = '#00d9f5'; // Highlight selected tile
+                    tileEl.style.zIndex = 2; // Bring selected tile forward
+                } else {
+                    tileEl.style.zIndex = 1;
                 }
                 tileEl.dataset.index = index;
 
@@ -818,6 +851,7 @@
 
                 boardContent.appendChild(tileEl); // Append to the content div
             });
+            renderPrereqLines(); // Re-render lines whenever tiles are re-rendered
         }
 
         function generateCSV(header, data) {
@@ -948,6 +982,7 @@
                         updateEditorPanel(index);
                         
                         requestAnimationFrame(updateCsvOutput);
+                        requestAnimationFrame(renderPrereqLines);
                     }
                 }
             })
@@ -994,6 +1029,7 @@
                         updateEditorPanel(index);
                         
                         requestAnimationFrame(updateCsvOutput);
+                        requestAnimationFrame(renderPrereqLines);
                     }
                 }
             });
@@ -1183,6 +1219,7 @@
                     el.disabled = true;
                     el.value = '';
                 });
+                renderPrereqLines();
                 return;
             }
             
@@ -1235,6 +1272,7 @@
             for (const [key, value] of Object.entries(overrides)) {
                 addOverrideRow(key, value);
             }
+            renderPrereqLines();
         }
 
         function populatePrereqUI(prereqString) {
@@ -1461,6 +1499,9 @@
             } else {
                 updateMainTileData(input);
             }
+            if (input.name === 'Prerequisites') {
+                renderPrereqLines();
+            }
             
             requestAnimationFrame(updateCsvOutput);
         }
@@ -1576,6 +1617,7 @@
                 renderTiles();
                 updateEditorPanel(null); // Explicitly clear the editor panel
                 updateCsvOutput();
+                renderPrereqLines();
             }
         }
 
@@ -1585,6 +1627,11 @@
         toggleSecurityBtn.addEventListener('click', toggleSecurity);
         toggleGlobalStylesBtn.addEventListener('click', toggleGlobalStyles);
         document.getElementById('global-style-form').addEventListener('input', handleGlobalStyleInputChange);
+
+        prereqVisModeSelect.addEventListener('change', (event) => {
+            prereqVisMode = event.target.value;
+            renderPrereqLines();
+        });
 
         boardContent.addEventListener('click', (event) => {
             // Don't open modal if the user is dragging/resizing with interact.js
@@ -1806,6 +1853,99 @@
                     renderTiles();
                 };
                 container.appendChild(btn);
+            });
+        }
+
+        // --- Prerequisite Line Rendering ---
+        function parsePrerequisites(prereqString) {
+            if (!prereqString || !prereqString.trim()) {
+                return [];
+            }
+            const trimmed = prereqString.trim();
+            if (trimmed.startsWith('[')) { // New format [[A,B],[C]]
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed) && (parsed.length === 0 || Array.isArray(parsed[0]))) {
+                        return parsed;
+                    }
+                } catch (e) { /* fall through to old format */ }
+            }
+            // Old format "A,B,C" treated as [[A,B,C]]
+            return [trimmed.split(',').map(s => s.trim()).filter(Boolean)];
+        }
+
+        function renderPrereqLines() {
+            prereqLinesSvg.innerHTML = ''; // Clear previous lines
+
+            if (prereqVisMode === 'hide' || lastSelectedTileIndex === null) {
+                return;
+            }
+
+            const destTileData = tilesData[lastSelectedTileIndex];
+            if (!destTileData) return;
+
+            const orGroups = parsePrerequisites(destTileData['Prerequisites']);
+            if (orGroups.length === 0) return;
+
+            const destCenter = {
+                x: destTileData.x_pct + destTileData.width_pct / 2,
+                y: destTileData.y_pct + destTileData.height_pct / 2
+            };
+
+            const totalGroups = orGroups.length;
+            const baseStrokeWidth = 0.3; // The width of the top-most line
+            const strokeWidthIncrement = 0.4; // The extra width for each layer underneath
+            const outlinePadding = 0.15; // Extra width for the black outline
+
+            // Draw layer by layer, from thickest (bottom) to thinnest (top).
+            // This ensures thinner lines are rendered on top of thicker ones.
+            orGroups.forEach((andGroup, orIndex) => {
+                // The thickest layer is drawn first. Its index is 0.
+                const strokeWidth = baseStrokeWidth + (totalGroups - 1 - orIndex) * strokeWidthIncrement;
+                const outlineWidth = strokeWidth + outlinePadding;
+                
+                // Distribute hue evenly across the color wheel for maximum distinction.
+                const hue = (orIndex * 360) / totalGroups;
+                const color = `hsl(${hue}, 85%, 55%)`;
+
+                const outlinesFragment = document.createDocumentFragment();
+                const fillsFragment = document.createDocumentFragment();
+
+                andGroup.forEach(tileId => {
+                    const sourceTileData = tilesData.find(t => t.TileID === tileId);
+                    if (!sourceTileData) return;
+
+                    const sourceCenter = {
+                        x: sourceTileData.x_pct + sourceTileData.width_pct / 2,
+                        y: sourceTileData.y_pct + sourceTileData.height_pct / 2
+                    };
+
+                    const p1 = { ...sourceCenter };
+                    const p2 = { ...destCenter };
+
+                    // Create outline line for this segment and add to fragment
+                    const outlineLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    outlineLine.setAttribute('x1', `${p1.x}%`); outlineLine.setAttribute('y1', `${p1.y}%`);
+                    outlineLine.setAttribute('x2', `${p2.x}%`); outlineLine.setAttribute('y2', `${p2.y}%`);
+                    outlineLine.setAttribute('stroke', 'black');
+                    outlineLine.setAttribute('stroke-width', `${outlineWidth}%`);
+                    outlineLine.setAttribute('stroke-linecap', 'round');
+                    outlinesFragment.appendChild(outlineLine);
+
+                    // Create fill line for this segment and add to a separate fragment
+                    const fillLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    fillLine.setAttribute('x1', `${p1.x}%`); fillLine.setAttribute('y1', `${p1.y}%`);
+                    fillLine.setAttribute('x2', `${p2.x}%`); fillLine.setAttribute('y2', `${p2.y}%`);
+                    fillLine.setAttribute('stroke', color);
+                    fillLine.setAttribute('stroke-width', `${strokeWidth}%`);
+                    fillLine.setAttribute('stroke-linecap', 'round');
+                    fillsFragment.appendChild(fillLine);
+                });
+
+                // For each layer, append all its outlines first, then all its fills.
+                // This ensures fills are drawn on top of outlines within the same layer.
+                prereqLinesSvg.appendChild(outlinesFragment);
+                prereqLinesSvg.appendChild(fillsFragment);
             });
         }
 
