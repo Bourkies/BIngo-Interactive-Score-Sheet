@@ -417,6 +417,34 @@
             width: fit-content;
         }
 
+        /* --- Prerequisite Editor Styles --- */
+        #prereq-editor-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #prereq-ui-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border: 1px solid #444;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #1a1a1a;
+        }
+        .prereq-or-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .prereq-or-label {
+            font-weight: bold;
+            color: #00aaff;
+        }
+        .prereq-and-input {
+            flex-grow: 1;
+        }
+
     </style>
 </head>
 <body>
@@ -1085,6 +1113,32 @@
                     textarea.title = key;
                     fieldContainer.appendChild(textarea);
                 } else {
+                    if (key === 'Prerequisites') {
+                        const prereqContainer = document.createElement('div');
+                        prereqContainer.id = 'prereq-editor-container';
+
+                        const textarea = document.createElement('textarea');
+                        textarea.id = `edit-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                        textarea.name = key;
+                        textarea.title = key;
+                        textarea.style.display = 'none'; // Hide the raw textarea, UI will populate it
+
+                        const uiContainer = document.createElement('div');
+                        uiContainer.id = 'prereq-ui-container';
+
+                        const addGroupBtn = document.createElement('button');
+                        addGroupBtn.type = 'button';
+                        addGroupBtn.textContent = '+ Add OR Group';
+                        addGroupBtn.onclick = () => { addPrereqOrGroup(); updatePrereqJson(); };
+
+                        prereqContainer.appendChild(textarea);
+                        prereqContainer.appendChild(uiContainer);
+                        prereqContainer.appendChild(addGroupBtn);
+                        fieldContainer.appendChild(prereqContainer);
+                        fieldContainer.prepend(label);
+                        detailsForm.appendChild(fieldContainer);
+                        return; // Skip default input creation
+                    }
                     const input = document.createElement('input');
                     input.type = 'text';
                     input.id = `edit-${key.replace(/[^a-zA-Z0-9]/g, '-')}`;
@@ -1160,6 +1214,14 @@
                 }
             });
 
+            // Populate the prerequisites UI
+            const prereqTextarea = detailsForm.elements['Prerequisites'];
+            if (prereqTextarea) {
+                const prereqValue = tile['Prerequisites'] || '';
+                prereqTextarea.value = prereqValue;
+                populatePrereqUI(prereqValue);
+            }
+
             // Populate the overrides section
             let overrides = {};
             try {
@@ -1173,6 +1235,86 @@
             for (const [key, value] of Object.entries(overrides)) {
                 addOverrideRow(key, value);
             }
+        }
+
+        function populatePrereqUI(prereqString) {
+            const uiContainer = document.getElementById('prereq-ui-container');
+            if (!uiContainer) return;
+            uiContainer.innerHTML = '';
+
+            let orGroups = [];
+            let isNewFormat = false;
+
+            if (prereqString && prereqString.trim().startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(prereqString);
+                    if (Array.isArray(parsed) && (parsed.length === 0 || Array.isArray(parsed[0]))) {
+                        orGroups = parsed;
+                        isNewFormat = true;
+                    }
+                } catch (e) { /* Not valid JSON, treat as old format */ }
+            }
+
+            if (isNewFormat) {
+                if (orGroups.length === 0) addPrereqOrGroup([]); // Show one empty box if it's an empty array `[]`
+                else orGroups.forEach(andGroup => addPrereqOrGroup(andGroup));
+            } else {
+                // Old format (e.g., "A1,A2") or invalid. Show as a single group.
+                addPrereqOrGroup(prereqString ? prereqString.split(',') : []);
+            }
+        }
+
+        function addPrereqOrGroup(andConditions = []) {
+            const uiContainer = document.getElementById('prereq-ui-container');
+            if (!uiContainer) return;
+
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'prereq-or-group';
+
+            const andInput = document.createElement('input');
+            andInput.type = 'text';
+            andInput.className = 'prereq-and-input';
+            andInput.placeholder = 'Tile IDs to AND (e.g. A1, A2)';
+            andInput.value = andConditions.map(s => String(s).trim()).filter(Boolean).join(', ');
+            andInput.oninput = updatePrereqJson;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.textContent = '−';
+            removeBtn.className = 'remove-override-btn'; // Re-use style
+            removeBtn.style.marginTop = 0;
+            removeBtn.onclick = () => {
+                groupDiv.remove();
+                updatePrereqJson();
+                // After removing, re-label the "OR"s
+                uiContainer.querySelectorAll('.prereq-or-label').forEach((label, index) => {
+                    if (index > 0) label.style.display = 'block'; else label.style.display = 'none';
+                });
+            };
+
+            const label = document.createElement('span');
+            label.textContent = 'OR';
+            label.className = 'prereq-or-label';
+            if (uiContainer.children.length === 0) label.style.display = 'none';
+
+            groupDiv.append(label, andInput, removeBtn);
+            uiContainer.appendChild(groupDiv);
+        }
+
+        function updatePrereqJson() {
+            const uiContainer = document.getElementById('prereq-ui-container');
+            const prereqTextarea = detailsForm.elements['Prerequisites'];
+            if (!uiContainer || !prereqTextarea) return;
+
+            const orGroups = Array.from(uiContainer.querySelectorAll('.prereq-or-group')).map(groupDiv => {
+                const input = groupDiv.querySelector('.prereq-and-input');
+                return input.value.split(',').map(s => s.trim()).filter(Boolean);
+            }).filter(group => group.length > 0);
+
+            if (orGroups.length === 0) prereqTextarea.value = '';
+            else if (orGroups.length === 1) prereqTextarea.value = orGroups[0].join(',');
+            else prereqTextarea.value = JSON.stringify(orGroups);
+            prereqTextarea.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
         function addOverrideRow(key = '', value = '') {
@@ -1310,6 +1452,9 @@
 
             const input = event.target;
             // Check if the input is part of an override item
+            if (input.closest('#prereq-editor-container')) {
+                // The updatePrereqJson function already handles updating the hidden textarea and firing the event.
+            }
             if (input.closest('.override-item')) {
                 updateOverridesJsonForCurrentTile();
                 renderTiles(); // Re-render to apply style overrides

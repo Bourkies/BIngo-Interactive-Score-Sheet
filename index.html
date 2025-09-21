@@ -358,10 +358,51 @@
         if (state.requiresAction) return 'Requires Action';
         if (state.complete) return 'Submitted';
         if (state.hasSubmission) return 'Partially Complete';
+
         const unlockOnVerifiedOnly = boardDataCache.config.unlockOnVerifiedOnly;
-        const prereqsMet = tile.prerequisites.every(prereqId => {
-            const prereqState = teamTileStates[prereqId] || {};
-            return unlockOnVerifiedOnly ? prereqState.verified : (prereqState.verified || prereqState.complete);
+
+        // The server's getBoardData() may split the 'Prerequisites' column by comma.
+        // We rejoin it here to reconstruct the original string, which could be a simple list or a JSON array string.
+        const prereqString = Array.isArray(tile.prerequisites) ? tile.prerequisites.join(',') : (tile.prerequisites || '');
+
+        if (!prereqString.trim()) {
+            return 'Unlocked'; // No prerequisites.
+        }
+
+        let orGroups = [];
+        let isNewFormat = false;
+
+        // Try to parse as JSON for the new AND/OR logic: e.g., [["A1","A2"],["B1"]]
+        if (prereqString.trim().startsWith('[')) {
+            try {
+                const parsed = JSON.parse(prereqString);
+                // Check if it's an array of arrays (or an empty array for an unlocked tile)
+                if (Array.isArray(parsed) && (parsed.length === 0 || Array.isArray(parsed[0]))) {
+                    orGroups = parsed;
+                    isNewFormat = true;
+                }
+            } catch (e) {
+                // Not valid JSON, will fall through to old format handling.
+            }
+        }
+
+        if (!isNewFormat) {
+            // Fallback to old format: a single AND group from a comma-separated list.
+            const andGroup = prereqString.split(',').map(s => s.trim()).filter(Boolean);
+            orGroups = andGroup.length > 0 ? [andGroup] : [];
+        }
+
+        if (orGroups.length === 0) {
+            return 'Unlocked'; // No prerequisites after parsing.
+        }
+
+        // Check if any 'OR' group is satisfied.
+        const prereqsMet = orGroups.some(andGroup => {
+            // An empty AND group `[]` is vacuously true because `[].every()` returns true.
+            return andGroup.every(prereqId => {
+                const prereqState = teamTileStates[prereqId] || {};
+                return unlockOnVerifiedOnly ? prereqState.verified : (prereqState.verified || prereqState.complete);
+            });
         });
         return prereqsMet ? 'Unlocked' : 'Locked';
     }

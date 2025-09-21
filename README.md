@@ -111,10 +111,15 @@ This sheet defines every tile on your board, copy the following table into the s
 | A | B | C | D | E | F | G | H | I | J | K |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
 | **TileID** | **Name** | **Description** | **Prerequisites** | **Top (%)** | **Left (%)** | **Width (%)** | **Height (%)** | **Points** | **Rotation** | **Overrides (JSON)** |
-| E1 | Tile 1 | Get x item |  | 10 | 5 | 15 | 15 | 10 | 0deg |  |
-| E2 | Tile 2 | Get y item | E1 | 25 | 5 | 15 | 15 | 10 | 15deg | {"Default Tile Shape": "Circle", "Tile Verified": "\#00FF00"} |
-| E3 | Tile 3 | Get z item |  | 40 | 5 | 15 | 15 | 10 | 0deg | {"Use Stamp by Default (Verified)": false} |
+| E1 | Tile 1 (No Prereq) | Get x item | | 10 | 5 | 15 | 15 | 10 | 0deg | {"Default Tile Shape": "Circle", "Tile Verified": "\#00FF00"} |
+| E2 | Tile 2 (Single Prereq) | Get y item | E1 | 25 | 5 | 15 | 15 | 10 | 0deg | {"Use Stamp by Default (Verified)": false} |
+| E3 | Tile 3 (Simple AND) | Get z item | E1,E2 | 40 | 5 | 15 | 15 | 15 | 0deg | |
+| E4 | Tile 4 (Simple OR) | Get a item | [["E1"],["E2"]] | 55 | 5 | 15 | 15 | 15 | 0deg | |
+| E5 | Tile 5 (Mixed AND/OR) | Get b item | [["E1","E2"],["E4"]] | 70 | 5 | 15 | 15 | 20 | 0deg | |
 
+*   **Prerequisites:** Defines which other tiles must be complete to unlock this one. Supports both simple and complex logic:
+    *   **Simple AND:** A comma-separated list of TileIDs (e.g., `E1,E2`). The tile unlocks if **both** E1 AND E2 are complete.
+    *   **Complex AND/OR:** For more advanced logic, use a JSON array of arrays (e.g., `[["E1","E2"],["E4"]]`). This means the tile unlocks if **(E1 AND E2) OR (E4)** is complete. Each inner array is an `AND` group, and the outer array `OR`s them together. The **Board Setup** page editor makes managing this easy.
 * **Rotation:** Sets the rotation of the entire tile. (e.g., 5deg, \-10deg). Defaults to 0deg.  
 * **Overrides (JSON):** A powerful feature to override any setting from the Config sheet for a single tile.  
   * Must be in valid JSON format: {"key": "value", "key2": "value2"}.  
