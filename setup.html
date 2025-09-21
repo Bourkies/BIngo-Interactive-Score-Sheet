@@ -203,6 +203,11 @@
         button:hover {
             background-color: #0088cc;
         }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
         .controls {
             margin-bottom: 20px;
             display: flex;
@@ -444,8 +449,8 @@
 
     <div class="controls">
         <div class="main-actions">
-            <button id="load-data-btn">Load from Sheet</button>
-            <button id="save-data-btn">Save All Changes to Sheet</button>
+            <button id="load-data-btn" onclick="handleLoadClick()">Load from Sheet</button>
+            <button id="save-data-btn" onclick="saveDataToSheet()">Save All Changes to Sheet</button>
         </div>
         <div class="zoom-control">
             <label for="zoom-slider">Zoom:</label>
@@ -650,8 +655,6 @@
         const passwordForm = document.getElementById('password-form');
         const mainContent = document.getElementById('main-content');
         const passwordOverlay = document.getElementById('password-overlay');
-        const saveDataBtn = document.getElementById('save-data-btn');
-        const loadDataBtn = document.getElementById('load-data-btn');
 
         // A more robust CSV/TSV parser
         function parseCsvLine(line, separator) {
@@ -1673,29 +1676,29 @@
             event.target.querySelector('button').disabled = true;
 
             showGlobalLoader();
-            // This will call your server-side Apps Script function
             google.script.run
                 .withSuccessHandler(isValid => {
                     if (isValid) {
                         passwordOverlay.style.display = 'none';
                         mainContent.style.display = 'block';
-                        loadDataFromSheet();
+                        // The loadDataFromSheet function will handle its own loader state
+                        loadDataFromSheet(); 
                     } else {
                         errorEl.textContent = 'Incorrect password.';
                         errorEl.style.display = 'block';
                         passwordInput.disabled = false;
                         event.target.querySelector('button').disabled = false;
+                        hideGlobalLoader(); // Hide loader only on failure
                     }
-                    hideGlobalLoader();
                 })
                 .withFailureHandler(err => {
                     errorEl.textContent = 'Error: ' + err.message;
                     errorEl.style.display = 'block';
                     passwordInput.disabled = false;
                     event.target.querySelector('button').disabled = false;
+                    hideGlobalLoader(); // Hide loader on failure
                 })
-                .verifyAdminPassword(password)
-                .finally(() => hideGlobalLoader());
+                .verifyAdminPassword(password);
         }
 
         function loadDataFromSheet() {
@@ -1705,77 +1708,99 @@
             showGlobalLoader();
 
             google.script.run
-                .withSuccessHandler(onDataLoaded)
+                .withSuccessHandler(onDataLoaded) // onDataLoaded will now handle UI state
                 .withFailureHandler(err => {
                     showMessage('Failed to load data: ' + err.message, true);
-                })
-                .getSetupPageData()
-                .finally(() => {
+                    // Explicitly re-enable buttons on failure
                     hideGlobalLoader();
                     document.getElementById('load-data-btn').disabled = false;
                     document.getElementById('save-data-btn').disabled = false;
-                });
+                })
+                .getSetupPageData();
         }
 
         function onDataLoaded(data) {
-            console.log("Data loaded successfully.", data);
-            // 1. Load Tiles
-            tilesData = parseCSV(data.tileCsv || '');
-            if (csvHeader.length > 0) {
-                createEditorForm(csvHeader);
-                updateEditorPanel(null);
-            }
-            
-            // 2. Load Global Styles
-            const parsedStyles = parseStyleCSV(data.styleCsv || '');
-            // Normalize boolean-like values to uppercase to handle inconsistencies from the sheet
-            for (const key in parsedStyles) {
-                if (Object.prototype.hasOwnProperty.call(parsedStyles, key)) {
-                    const isBooleanLike = ['Show Tile Names', 'Unlock on Verified Only', 'Show Scoreboard'].includes(key) || key.startsWith('Use Stamp by Default');
-                    if (isBooleanLike) {
-                        const upperValue = String(parsedStyles[key]).toUpperCase();
-                        if (upperValue === 'TRUE' || upperValue === 'FALSE') parsedStyles[key] = upperValue;
+            try {
+                console.log("Data loaded successfully.", data);
+                // 1. Load Tiles
+                tilesData = parseCSV(data.tileCsv || '');
+                if (csvHeader.length > 0) {
+                    createEditorForm(csvHeader);
+                    updateEditorPanel(null);
+                }
+                
+                // 2. Load Global Styles
+                const parsedStyles = parseStyleCSV(data.styleCsv || '');
+                // Normalize boolean-like values to uppercase to handle inconsistencies from the sheet
+                for (const key in parsedStyles) {
+                    if (Object.prototype.hasOwnProperty.call(parsedStyles, key)) {
+                        const isBooleanLike = ['Show Tile Names', 'Unlock on Verified Only', 'Show Scoreboard'].includes(key) || key.startsWith('Use Stamp by Default');
+                        if (isBooleanLike) {
+                            const upperValue = String(parsedStyles[key]).toUpperCase();
+                            if (upperValue === 'TRUE' || upperValue === 'FALSE') parsedStyles[key] = upperValue;
+                        }
                     }
                 }
+                Object.assign(globalStyles, parsedStyles);
+                populateGlobalStyleEditor();
+                const imageUrl = globalStyles['Bingo Board Image'] || '';
+                boardImage.src = imageUrl;
+                boardContent.style.backgroundImage = imageUrl ? `url('${imageUrl}')` : 'none';
+
+                // 3. Load Security & Teams
+                securityConfig = data.securityConfig || { adminPass: '', teams: [] };
+                populateSecurityEditor();
+
+                // 4. Render and Update UI
+                renderTiles();
+                updateCsvOutput();
+                updateStyleCsvOutput();
+                showMessage('Data loaded successfully!', false);
+            } catch (e) {
+                showMessage('Error processing loaded data: ' + e.message, true);
+                console.error("Error in onDataLoaded: ", e);
+            } finally {
+                // This block runs whether the try succeeded or failed, ensuring UI is restored.
+                hideGlobalLoader();
+                document.getElementById('load-data-btn').disabled = false;
+                document.getElementById('save-data-btn').disabled = false;
             }
-            Object.assign(globalStyles, parsedStyles);
-            populateGlobalStyleEditor();
-            const imageUrl = globalStyles['Bingo Board Image'] || '';
-            boardImage.src = imageUrl;
-            boardContent.style.backgroundImage = imageUrl ? `url('${imageUrl}')` : 'none';
-
-            // 3. Load Security & Teams
-            securityConfig = data.securityConfig || { adminPass: '', teams: [] };
-            populateSecurityEditor();
-
-            // 4. Render and Update UI
-            renderTiles();
-            updateCsvOutput();
-            updateStyleCsvOutput();
         }
 
         function saveDataToSheet() {
             document.getElementById('save-data-btn').disabled = true;
+            document.getElementById('load-data-btn').disabled = true;
             showGlobalLoader();
 
-            const payload = {
-                tileCsv: generateCSV(csvHeader, tilesData),
-                styleCsv: generateStyleCSV(),
-                securityConfig: collectSecurityData()
-            };
+            // Use a try...catch block to ensure UI is restored even if data preparation fails.
+            try {
+                const payload = {
+                    tileCsv: generateCSV(csvHeader, tilesData),
+                    styleCsv: generateStyleCSV(),
+                    securityConfig: collectSecurityData()
+                };
 
-            google.script.run
-                .withSuccessHandler(() => {
-                    showMessage('All changes saved successfully!', false);
-                })
-                .withFailureHandler(err => {
-                    showMessage('Error saving changes: ' + err.message, true);
-                })
-                .saveSetupPageData(payload)
-                .finally(() => {
-                    hideGlobalLoader();
-                    document.getElementById('save-data-btn').disabled = false;
-                });
+                google.script.run
+                    .withSuccessHandler(() => {
+                        showMessage('All changes saved successfully!', false);
+                        hideGlobalLoader();
+                        document.getElementById('save-data-btn').disabled = false;
+                        document.getElementById('load-data-btn').disabled = false;
+                    })
+                    .withFailureHandler(err => {
+                        showMessage('Error saving changes: ' + err.message, true);
+                        hideGlobalLoader();
+                        document.getElementById('save-data-btn').disabled = false;
+                        document.getElementById('load-data-btn').disabled = false;
+                    })
+                    .saveSetupPageData(payload);
+            } catch (e) {
+                hideGlobalLoader();
+                document.getElementById('save-data-btn').disabled = false;
+                document.getElementById('load-data-btn').disabled = false;
+                showMessage('Error preparing data to save: ' + e.message, true);
+                console.error("Error in saveDataToSheet: ", e);
+            }
         }
 
         function populateSecurityEditor() {
@@ -1830,13 +1855,13 @@
             };
         }
 
-        passwordForm.addEventListener('submit', checkPassword);
-        saveDataBtn.addEventListener('click', saveDataToSheet);
-        loadDataBtn.addEventListener('click', () => {
+        function handleLoadClick() {
             if (confirm('Are you sure? This will discard any unsaved changes on the page and reload from the Google Sheet.')) {
                 loadDataFromSheet();
             }
-        });
+        }
+
+        passwordForm.addEventListener('submit', checkPassword); // Keep this one for form submission
         document.getElementById('add-team-btn').addEventListener('click', () => addTeamRow());
 
         // --- NEW: Global Loader & Message Box Functions ---
