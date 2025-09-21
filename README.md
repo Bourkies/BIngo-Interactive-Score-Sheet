@@ -1,8 +1,8 @@
 # BIngo-Interactive-Score-Sheet
-A basic interactive template for bingo competitions using google web aps and google sheets
+A basic interactive template for bingo competitions using Google Web Apps and Google Sheets.
 
-Welcome to the Interacrive bingo score sheet\! This guide provides everything you need to set up your own free, secure, and easy-to-use bingo board for your clan or community event.  
-The system uses a Google Sheet as a database and a Google Apps Script Web App as the user-facing interface.
+Welcome to the Interactive Bingo Score Sheet! This guide provides everything you need to set up your own free, secure, and easy-to-use bingo board for your clan or community event.
+The system uses a Google Sheet as a database and a Google Apps Script web app as the user-facing interface.
 
 ## **Part 1: Setting Up The Google Sheet**
 
@@ -151,10 +151,10 @@ This script connects your sheet to the web app.
 ### **Step 2: Create the Script Files**
 
 1. **Code.gs**: Delete any content inside and copy-paste the code from the Code.gs document provided.  
-2. **overview.html**: Click the + icon in the "Files" sidebar, select "HTML", name it `overview`, and copy-paste the code from the `overview.html` document provided.
-2. **index.html**: Delete any content inside and copy-paste the code from the index.html document provided.
-3. **admin.html**: Click the + icon in the "Files" sidebar, select "HTML", name it `admin`, and copy-paste the code from the admin.html document provided.
-4. **Setup.html**: Click the + icon in the "Files" sidebar, select "HTML", name it `Setup`, and copy-paste the code from the `Setup.html` document provided.
+2. **index.html**: Delete any content inside the default `index.html` file and copy-paste the code from the `index.html` document provided.
+3. **overview.html**: Click the `+` icon in the "Files" sidebar, select "HTML", name it `overview`, and copy-paste the code from the `overview.html` document provided.
+4. **admin.html**: Click the `+` icon in the "Files" sidebar, select "HTML", name it `admin`, and copy-paste the code from the `admin.html` document provided.
+5. **Setup.html**: Click the `+` icon in the "Files" sidebar, select "HTML", name it `Setup`, and copy-paste the code from the `Setup.html` document provided.
 
 ### **Step 3: Save and Deploy**
 
@@ -208,6 +208,9 @@ This is the recommended way for admins to manage submissions.
 *   Click on any row to open an edit modal and update the status checkboxes.
 
 **The Google Sheet (Manual Method)**
+*   Go to the Submissions tab in the Google Sheet.  
+*   Review the evidence. If it's valid, set the value in the Admin Verified column to TRUE.  
+*   If a submission needs changes, set RequiresAction to TRUE and add notes for the player in the Notes column.
 
 * Go to the Submissions tab in the Google Sheet.  
 * Review the evidence. If it's valid, set the value in the Admin Verified column to TRUE.  
@@ -223,19 +226,23 @@ To avoid accidentally breaking the board's configuration, it's highly recommende
 4. Click **Set permissions**.  
 5. Set to "can edit(with warning) **Done**.
 
-Repeat these steps for the **Tiles** sheet. Now, only you (the owner of the spreadsheet) can edit these two critical sheets, but other admins you've shared the sheet with can still view them and manage the Submissions sheet.
+Repeat these steps for the other sheets. Now you will be protected from accidental editing of the sheets that could break the app.
 
-### **Protecting Sheets**
+## Helper Tools
 
-To prevent other admins from accidentally breaking the board's configuration, it's highly recommended to protect the Config and Tiles sheets.
+### Tile Link Tool (`/tile_link_tool`)
 
-1. Click on the **Config** tab.  
-2. Click the small down-arrow on the tab itself, and select **Protect sheet**.  
-3. A sidebar will open. You can add a description like "Board Configuration \- Do Not Edit".  
-4. Click **Set permissions**.  
-5. By default, it will be set to "Only you". This is ideal. Click **Done**.
+To simplify the creation of board layouts, especially for events like tile races where multiple start paths are needed, a visual helper tool is included in the `tile_link_tool` directory. This tool allows you to visually link adjacent tiles and export the prerequisite data.
 
-Repeat these steps for the **Tiles** sheet. Now, only you (the owner of the spreadsheet) can edit these two critical sheets, but other admins you've shared the sheet with can still view them and manage the Submissions sheet.
+**Key Features:**
+
+-   Load tile positions from a CSV file.
+-   Display tiles over a background image of your board.
+-   Automatically link tiles based on distance.
+-   Manually add/remove links.
+-   Export a new CSV with a `Prerequisites` column formatted for simple `OR` logic (e.g., `[["TileA"], ["TileB"]]`).
+
+This is particularly useful for generating the initial `OR` conditions for starting tiles or for creating branching paths on the board. For detailed instructions, see the `README.md` inside the `tile_link_tool` directory.
 
 ## **Note on AI Generation**
 

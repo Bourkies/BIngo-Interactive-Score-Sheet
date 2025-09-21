@@ -1,5 +1,9 @@
-# Ignore all files and subdirectories within /tile_tools/
-/tile_tools/*
+# Ignore all files and subdirectories within /tile_link_tool/
+/tile_link_tool/*
 
 # But do not ignore (un-ignore) this specific file
-!/tile_tools/tile_editor.html
+!/tile_link_tool/install_dependencies.bat
+!/tile_link_tool/launch_tool.bat
+!/tile_link_tool/Link_tiles.py
+!/tile_link_tool/requirements.txt
+!/tile_link_tool/README_Link_tiles.md
