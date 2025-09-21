@@ -9,6 +9,8 @@ function doGet(e) {
     template = HtmlService.createTemplateFromFile('overview');
   } else if (e.parameter.page === 'admin') {
     template = HtmlService.createTemplateFromFile('admin');
+  } else if (e.parameter.page === 'setup') {
+    template = HtmlService.createTemplateFromFile('setup');
   } else {
     template = HtmlService.createTemplateFromFile('index');
   }
@@ -161,7 +163,9 @@ function getTileDetails(tileId, teamName) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const submissionsSheet = ss.getSheetByName('Submissions');
     if (!submissionsSheet) return null;
-    const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
+    const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
+    // Filter out archived submissions
+    const submissions = allSubmissions.filter(s => s.IsArchived !== true);
     
     const sub = submissions.slice().reverse().find(s => s['TileID'] === tileId && s['Team'] === teamName);
 
@@ -198,7 +202,9 @@ function getLatestTeamData() {
         return acc;
     }, {});
 
-    const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
+    const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
+    // Filter out archived submissions from all calculations
+    const submissions = allSubmissions.filter(s => s.IsArchived !== true);
     const teamNamesList = String(config['Team Names'] || '').split(',').map(t => t.trim());
     const teamData = {};
     teamNamesList.forEach(name => {
@@ -267,6 +273,7 @@ function submitOrUpdateTile(submissionData) {
     const { list: headers, map: headerMap } = getHeaders(submissionsSheet);
     const submissions = submissionsSheet.getDataRange().getValues();
     let rowIndex = -1;
+    const isArchivedColIndex = headerMap['IsArchived'] ? headerMap['IsArchived'] - 1 : -1;
 
     const teamColIndex = headerMap['Team'] - 1;
     const tileIdColIndex = headerMap['TileID'] - 1;
@@ -277,6 +284,8 @@ function submitOrUpdateTile(submissionData) {
 
     // Search backwards for the most recent entry
     for (let i = submissions.length - 1; i >= 1; i--) {
+      // Player cannot update an archived submission
+      if (isArchivedColIndex !== -1 && submissions[i][isArchivedColIndex] === true) continue;
       if (submissions[i][teamColIndex] === submissionData.team && submissions[i][tileIdColIndex] === submissionData.tileId) {
         rowIndex = i + 1;
         existingRowValues = submissions[i];
@@ -306,6 +315,7 @@ function submitOrUpdateTile(submissionData) {
             case 'Admin Verified': return false; // Always false on player submission/update
             case 'IsComplete': return submissionData.isComplete;
             case 'RequiresAction': return submissionData.requiresAction;
+            case 'IsArchived': return false; // Never archived on submission
             default: return '';
         }
     });
@@ -385,8 +395,20 @@ function getAdminData(password) {
       return acc;
     }, {});
     
+    // --- NEW: Find duplicate submissions ---
+    // Only non-archived submissions can be part of a duplicate set to be resolved.
+    const nonArchivedSubmissions = submissions.filter(s => s.IsArchived !== true);
+    const groups = {};
+    nonArchivedSubmissions.forEach(sub => {
+      const key = `${sub.Team}-${sub.TileID}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(sub);
+    });
+
+    const duplicateGroups = Object.values(groups).filter(group => group.length > 1);
+
     // Return both submissions and the new tiles map
-    return { success: true, submissions: submissions.reverse(), tiles: tilesMap };
+    return { success: true, submissions: submissions.reverse(), tiles: tilesMap, duplicates: duplicateGroups };
 
   } catch (error) {
     Logger.log(`Error in getAdminData after password verification: ${error.stack}`);
@@ -424,7 +446,9 @@ function getOverviewData() {
         });
 
         // --- Process for Feed & Chart ---
-        const { data: submissions } = getSheetDataAsObjects(submissionsSheet);
+        const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
+        const submissions = allSubmissions.filter(s => s.IsArchived !== true);
+
         const { data: tileObjects } = getSheetDataAsObjects(tilesSheet);
         const tileInfoMap = tileObjects.reduce((acc, row) => {
             if (row['TileID']) {
@@ -442,7 +466,7 @@ function getOverviewData() {
             .slice(0, 20)
             .map(s => ({
                 team: s['Team'],
-                tileId: s['TileID'],
+                tileId: s['TileID'], // This was already here, just confirming it's used in overview.html
                 tileName: tileInfoMap[s['TileID']] ? tileInfoMap[s['TileID']].name : 'Unknown',
                 timestamp: new Date(s['Timestamp']).toLocaleString(),
                 status: s['Admin Verified'] ? 'Verified' : 'Completed'
@@ -485,7 +509,16 @@ function getOverviewData() {
             chartDataPoints.push(dataPoint);
         });
 
-        return { success: true, feed: feedItems, leaderboard: leaderboard, chartData: chartDataPoints, config: { pageTitle: config['Page Title'], teamNames: teamNamesList } };
+        const frontendConfig = {
+            pageTitle: config['Page Title'],
+            teamNames: teamNamesList,
+            scoreOnVerifiedOnly: config['Score on Verified Only'] !== false
+        };
+
+        // Make sure overviewDataCache.config.scoreOnVerifiedOnly is available
+        return { 
+            success: true, feed: feedItems, leaderboard: leaderboard, chartData: chartDataPoints, config: frontendConfig 
+        };
     } catch (e) {
         Logger.log(e.stack);
         return { success: false, error: e.message };
@@ -544,6 +577,195 @@ function updateSubmissionStatus(updateData) {
   } catch (error) {
     Logger.log(`Error in updateSubmissionStatus after password verification: ${error.stack}`);
     return { success: false, message: 'An error occurred while updating the submission.' };
+  }
+}
+
+/**
+ * Archives duplicate submissions, keeping only one active.
+ * @param {object} data The payload from the client containing identifiers.
+ *                      { password: string, keepIdentifier: object, archiveIdentifiers: object[] }
+ */
+function archiveSubmissions(data) {
+  if (!verifyAdminPassword(data.password)) {
+    return { success: false, message: 'Invalid Admin Password.' };
+  }
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Submissions');
+    const { map: headerMap, list: headers } = getHeaders(sheet);
+
+    // Add 'IsArchived' header if it doesn't exist
+    let isArchivedCol = headerMap['IsArchived'];
+    if (!isArchivedCol) {
+      sheet.getRange(1, headers.length + 1).setValue('IsArchived');
+      isArchivedCol = headers.length + 1;
+    }
+
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+    const timestampCol = headerMap['Timestamp'] - 1;
+    const teamCol = headerMap['Team'] - 1;
+    const tileIdCol = headerMap['TileID'] - 1;
+
+    const archiveIds = new Set(data.archiveIdentifiers.map(id => `${new Date(id.Timestamp).toISOString()}-${id.Team}-${id.TileID}`));
+    const keepId = `${new Date(data.keepIdentifier.Timestamp).toISOString()}-${data.keepIdentifier.Team}-${data.keepIdentifier.TileID}`;
+
+    for (let i = 1; i < values.length; i++) { // Start at 1 to skip header
+      const row = values[i];
+      const rowId = `${new Date(row[timestampCol]).toISOString()}-${row[teamCol]}-${row[tileIdCol]}`;
+
+      if (archiveIds.has(rowId)) {
+        values[i][isArchivedCol - 1] = true;
+      } else if (rowId === keepId) {
+        values[i][isArchivedCol - 1] = false;
+      }
+    }
+
+    range.setValues(values);
+    
+    return { success: true, message: 'Duplicates resolved successfully.' };
+
+  } catch (e) {
+    Logger.log(`Error in archiveSubmissions: ${e.stack}`);
+    return { success: false, message: 'An error occurred: ' + e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// --- SETUP PAGE FUNCTIONS ---
+
+/**
+ * Fetches all data required for the setup page from the Google Sheet.
+ * @return {object} An object containing CSV strings for tiles and styles,
+ *                  and a configuration object for security settings.
+ */
+function getSetupPageData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const tileSheet = ss.getSheetByName('Tiles');
+    const configSheet = ss.getSheetByName('Config');
+
+    if (!tileSheet || !configSheet) {
+      throw new Error('Could not find "Tiles" or "Config" sheet.');
+    }
+
+    // 1. Get Tile Data as CSV
+    const tileData = tileSheet.getDataRange().getValues();
+    const tileCsv = tileData.map(row => {
+      return row.map(cell => {
+        const strCell = String(cell);
+        if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) {
+          return `"${strCell.replace(/"/g, '""')}"`;
+        }
+        return strCell;
+      }).join(',');
+    }).join('\n');
+
+    // 2. Get Config/Style Data as CSV
+    const configData = configSheet.getDataRange().getValues();
+    const styleCsv = configData.map(row => `"${String(row[0]).replace(/"/g, '""')}","${String(row[1]).replace(/"/g, '""')}"`).join('\n');
+
+    // 3. Get Security/Team Data from Config
+    const config = getFullConfig(ss);
+    const teamNames = (config['Team Names'] || '').split(',').map(t => t.trim()).filter(Boolean);
+    
+    const securityConfig = {
+      teams: teamNames.map(name => ({ name: name }))
+      // We don't send passwords to the client
+    };
+
+    return {
+      tileCsv: tileCsv,
+      styleCsv: styleCsv,
+      securityConfig: securityConfig
+    };
+  } catch (e) {
+    Logger.log('Error in getSetupPageData: ' + e.toString());
+    throw new Error('Could not load data from the spreadsheet. Check sheet names ("Tiles", "Config").');
+  }
+}
+
+/**
+ * Saves all setup data from the page back to the Google Sheet.
+ * @param {object} payload The data object from the client.
+ *                         { tileCsv: string, styleCsv: string, securityConfig: object }
+ */
+function saveSetupPageData(payload) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds.
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. Save Tile Data
+    const tileSheet = ss.getSheetByName('Tiles');
+    const tileData = Utilities.parseCsv(payload.tileCsv);
+    tileSheet.clearContents();
+    if (tileData.length > 0) {
+      tileSheet.getRange(1, 1, tileData.length, tileData[0].length).setValues(tileData);
+    }
+
+    // 2. Save Config/Style Data
+    const configSheet = ss.getSheetByName('Config');
+    const currentConfigFromSheet = getFullConfig(ss);
+
+    // Create a mutable copy to work with
+    const newConfig = { ...currentConfigFromSheet };
+
+    const styleData = Utilities.parseCsv(payload.styleCsv);
+    styleData.shift(); // remove header
+    styleData.forEach(row => {
+      const key = row[0];
+      if (key && key !== 'Team Names' && key !== 'Team Passwords' && key !== 'Admin Password') {
+        newConfig[key] = row[1];
+      }
+    });
+
+    const security = payload.securityConfig;
+    if (security.adminPass) newConfig['Admin Password'] = security.adminPass;
+
+    const oldTeamNames = (newConfig['Team Names'] || '').split(',').map(t => t.trim());
+    const oldTeamPasswords = (newConfig['Team Passwords'] || '').split(',').map(p => p.trim());
+    const oldPasswordsMap = oldTeamNames.reduce((acc, name, i) => { acc[name] = oldTeamPasswords[i] || ''; return acc; }, {});
+
+    const newTeamNames = security.teams.map(t => t.name).filter(Boolean);
+    const newTeamPasswords = newTeamNames.map(name => {
+        const teamPayload = security.teams.find(t => t.name === name);
+        return teamPayload.password || oldPasswordsMap[name] || ''; // Keep old password if new one isn't provided
+    });
+
+    newConfig['Team Names'] = newTeamNames.join(',');
+    newConfig['Team Passwords'] = newTeamPasswords.join(',');
+
+    // --- Safer Update for Config Sheet ---
+    // This method avoids clearing the sheet, preserving other columns and key order.
+    const lastRow = configSheet.getLastRow();
+    const sheetKeys = lastRow > 0 ? configSheet.getRange(1, 1, lastRow, 1).getValues().flat() : [];
+    const keysToAppend = [];
+
+    for (const key in newConfig) {
+      const rowIndex = sheetKeys.indexOf(key);
+      if (rowIndex !== -1) {
+        // Key exists, update its value in column B
+        configSheet.getRange(rowIndex + 1, 2).setValue(newConfig[key]);
+      } else {
+        // Key is new, add it to a list to be appended at the end
+        keysToAppend.push([key, newConfig[key]]);
+      }
+    }
+    if (keysToAppend.length > 0) {
+      configSheet.getRange(lastRow + 1, 1, keysToAppend.length, 2).setValues(keysToAppend);
+    }
+
+    return 'Success';
+  } catch (e) {
+    Logger.log('Error in saveSetupPageData: ' + e.toString() + ' ' + e.stack);
+    throw new Error('Failed to save data. The sheet might be busy. Please try again.');
+  } finally {
+    lock.releaseLock();
   }
 }
 

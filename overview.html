@@ -21,12 +21,33 @@
       padding: 0.5rem 1rem; margin: 0 auto 1.5rem auto; display: flex; justify-content: space-between;
       align-items: center; box-sizing: border-box;
     }
-    .nav-links a {
-      color: var(--primary-text); text-decoration: none; padding: 0.5rem 1rem;
-      border-radius: 6px; transition: background-color 0.2s;
+    .nav-links a, .nav-actions button {
+      color: var(--primary-text);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+      background: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
     }
-    .nav-links a:hover { background-color: rgba(255, 255, 255, 0.1); }
+    .nav-links a:hover, .nav-actions button:hover { background-color: rgba(255, 255, 255, 0.1); }
     .nav-links a.active { background-color: var(--accent-color); color: #111; font-weight: bold; }
+    /* --- NEW: Global Loader --- */
+    .global-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: linear-gradient(to right, var(--accent-color) 20%, #00d9f5 50%, var(--accent-color) 80%);
+        background-size: 200% auto;
+        animation: loading-animation 1.5s linear infinite;
+        z-index: 9999;
+        display: none; /* Hidden by default */
+    }
+    @keyframes loading-animation { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .container {
       width: 100%; max-width: 1400px; margin: 0 auto;
       display: grid;
@@ -50,7 +71,6 @@
       min-height: 300px;
       width: 100%;
     }
-    #loader { text-align: center; font-size: 1.5rem; padding: 4rem; grid-column: 1 / -1; }
     /* Leaderboard Styles */
     #leaderboard-table { width: 100%; border-collapse: collapse; }
     #leaderboard-table th, #leaderboard-table td {
@@ -70,6 +90,19 @@
     .feed-item .feed-title { font-weight: bold; }
     .feed-item .feed-meta { font-size: 0.85rem; color: var(--secondary-text); margin-top: 0.25rem; }
 
+    .feed-controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .feed-controls select {
+        background-color: var(--bg-color);
+        color: var(--primary-text);
+        border: 1px solid var(--border-color);
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+    }
     /* Responsive layout for smaller screens */
     @media (max-width: 960px) {
       .container {
@@ -79,16 +112,19 @@
   </style>
 </head>
 <body>
+  <div id="global-loader" class="global-loader"></div>
 
   <div class="navbar">
     <div class="nav-links">
       <a href="<?= ScriptApp.getService().getUrl() ?>">Player View</a>
       <a href="<?= ScriptApp.getService().getUrl() ?>?page=overview" class="active">Overview</a>
       <a href="<?= ScriptApp.getService().getUrl() ?>?page=admin">Admin View</a>
+      <a href="<?= ScriptApp.getService().getUrl() ?>?page=setup">Board Setup</a>
+    </div>
+    <div class="nav-actions">
+      <button onclick="refreshData()">Refresh Data</button>
     </div>
   </div>
-
-  <div id="loader">Loading Overview Data...</div>
 
   <div id="main-content" class="container" style="display: none;">
     <div class="main-column">
@@ -116,6 +152,10 @@
     <div class="side-column">
       <div class="grid-item">
         <h2>Latest Activity</h2>
+        <div class="feed-controls">
+          <label for="feed-team-filter">Filter:</label>
+          <select id="feed-team-filter" onchange="handleFilterChange()"></select>
+        </div>
         <div id="feed-container"></div>
       </div>
     </div>
@@ -124,26 +164,45 @@
   <script>
     document.addEventListener('DOMContentLoaded', fetchOverviewData);
 
+    let overviewDataCache = null;
+    let fullFeedData = [];
+    let teamColorMap = {};
+    let myScoreChart = null;
+    let fullChartData = [];
+    let allTeamNames = [];
+
     function fetchOverviewData() {
+      showGlobalLoader();
       google.script.run
         .withSuccessHandler(data => {
           if (!data || !data.success) {
-            document.getElementById('loader').textContent = 'Error loading data: ' + (data ? data.error : 'Unknown error');
+            document.body.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--error-color);">Error loading data: ${data ? data.error : 'Unknown error'}</div>`;
             return;
           }
 
+          overviewDataCache = data;
           document.title = data.config.pageTitle + ' | Overview';
-          renderLeaderboard(data.leaderboard);
-          renderFeed(data.feed);
-          renderChart(data.chartData, data.config.teamNames);
+          teamColorMap = generateTeamColors(data.config.teamNames);
+          fullFeedData = data.feed;
+          fullChartData = data.chartData;
+          allTeamNames = data.config.teamNames;
 
-          document.getElementById('loader').style.display = 'none';
+          populateFeedFilter(data.config.teamNames);
+          renderLeaderboard(data.leaderboard);
+          handleFilterChange(); // This will render both the feed and chart
+
           document.getElementById('main-content').style.display = 'grid';
         })
         .withFailureHandler(error => {
-          document.getElementById('loader').textContent = 'Failed to fetch data: ' + error.message;
+          document.body.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--error-color);">Failed to fetch data: ${error.message}</div>`;
         })
-        .getOverviewData();
+        .getOverviewData()
+        .finally(() => hideGlobalLoader());
+    }
+
+    // New function for the refresh button
+    function refreshData() {
+      fetchOverviewData();
     }
 
     function renderLeaderboard(leaderboardData) {
@@ -164,19 +223,49 @@
       });
     }
 
-    function renderFeed(feedData) {
+    function populateFeedFilter(teamNames) {
+      const select = document.getElementById('feed-team-filter');
+      select.innerHTML = '<option value="all">All Teams</option>';
+      teamNames.forEach(team => {
+        const option = document.createElement('option');
+        option.value = team;
+        option.textContent = team;
+        select.appendChild(option);
+      });
+    }
+
+    function renderFeed() {
       const container = document.getElementById('feed-container');
       container.innerHTML = '';
-      if (!feedData || feedData.length === 0) {
-        container.innerHTML = '<p>No recent activity.</p>';
+      const selectedTeam = document.getElementById('feed-team-filter').value;
+      const filteredData = selectedTeam === 'all' ? fullFeedData : fullFeedData.filter(item => item.team === selectedTeam);
+
+      // Filter for only tiles that would be scored based on the config
+      const scoreOnVerifiedOnly = overviewDataCache.config.scoreOnVerifiedOnly;
+      const scoredActivity = filteredData.filter(item => {
+        if (scoreOnVerifiedOnly) {
+          return item.status === 'Verified';
+        }
+        // If not verified-only, any completed or verified tile is scored.
+        // The feed from the server already only includes these statuses.
+        return true;
+      });
+
+      if (!scoredActivity || scoredActivity.length === 0) {
+        container.innerHTML = '<p>No recent scored activity for the selected filter.</p>';
         return;
       }
-      feedData.forEach(item => {
+      scoredActivity.forEach(item => {
         const div = document.createElement('div');
         div.className = 'feed-item';
+        const teamColor = teamColorMap[item.team] || 'var(--accent-color)';
+        div.style.borderLeftColor = teamColor;
+        // NOTE: For the Tile ID to appear, the server must send 'tileId' in the feed data.
+        const tileId = item.tileId || '';
+        const tileName = item.tileName || 'Unknown Tile';
         div.innerHTML = `
-          <p class="feed-title">${item.team} ${item.status.toLowerCase()} '${item.tileName}'</p>
-          <p class="feed-meta">${item.timestamp}</p>
+          <p class="feed-title">${item.team}: ${tileId} ${tileName}</p>
+          <p class="feed-meta">${new Date(item.timestamp).toUTCString()}</p>
         `;
         container.appendChild(div);
       });
@@ -187,35 +276,38 @@
      * @param {number} count The number of colors to generate.
      * @returns {string[]} An array of HSL color strings.
      */
-    function generateTeamColors(count) {
-        const colors = [];
+    function generateTeamColors(teamNames) {
+        const colors = {};
         // Using the golden angle approximation for hue distribution ensures that
         // colors are maximally distinct, even for a large number of teams.
         const goldenAngle = 137.5; 
-        for (let i = 0; i < count; i++) {
+        teamNames.forEach((team, i) => {
             const hue = (i * goldenAngle) % 360;
-            colors.push(`hsl(${hue}, 70%, 55%)`);
-        }
+            colors[team] = `hsl(${hue}, 70%, 55%)`;
+        });
         return colors;
     }
 
     function renderChart(chartData, teamNames) {
+        if (myScoreChart) {
+            myScoreChart.destroy();
+        }
         const ctx = document.getElementById('score-chart').getContext('2d');
         
-        const teamColors = generateTeamColors(teamNames.length);
-
         const datasets = teamNames.map((team, index) => {
+            const color = teamColorMap[team] || '#ffffff';
             return {
                 label: team,
-                data: chartData.map(point => ({ x: point.timestamp, y: point[team] })),
-                borderColor: teamColors[index],
-                backgroundColor: teamColors[index],
+                data: chartData.map(point => ({ x: point.timestamp, y: point[team] || null })),
+                borderColor: color,
+                backgroundColor: color,
                 fill: false,
                 stepped: true,
+                spanGaps: true,
             };
         });
 
-        new Chart(ctx, {
+        myScoreChart = new Chart(ctx, {
             type: 'line',
             data: {
                 datasets: datasets
@@ -230,14 +322,23 @@
                     },
                     tooltip: {
                         mode: 'index',
-                        intersect: false
+                        intersect: false,
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                if (tooltipItems.length > 0) {
+                                    const date = new Date(tooltipItems[0].parsed.x);
+                                    return date.toUTCString();
+                                }
+                                return '';
+                            }
+                        }
                     }
                 },
                 scales: {
                     x: {
                         type: 'time',
                         time: {
-                            tooltipFormat: 'PPpp'
+                            // Tooltip format is now handled by the tooltip title callback
                         },
                         title: {
                             display: true,
@@ -259,6 +360,21 @@
                 }
             }
         });
+    }
+
+    function handleFilterChange() {
+      renderFeed();
+      const selectedTeam = document.getElementById('feed-team-filter').value;
+      const filteredTeamNames = selectedTeam === 'all' ? allTeamNames : [selectedTeam];
+      renderChart(fullChartData, filteredTeamNames);
+    }
+
+    // --- NEW: Global Loader Functions ---
+    function showGlobalLoader() {
+        document.getElementById('global-loader').style.display = 'block';
+    }
+    function hideGlobalLoader() {
+        document.getElementById('global-loader').style.display = 'none';
     }
   </script>
 </body>

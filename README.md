@@ -1,8 +1,8 @@
 # BIngo-Interactive-Score-Sheet
-A basic interactive template for bingo competitions using google web aps and google sheets
+A basic interactive template for bingo competitions using Google Web Apps and Google Sheets.
 
-Welcome to the Interacrive bingo score sheet\! This guide provides everything you need to set up your own free, secure, and easy-to-use bingo board for your clan or community event.  
-The system uses a Google Sheet as a database and a Google Apps Script Web App as the user-facing interface.
+Welcome to the Interactive Bingo Score Sheet! This guide provides everything you need to set up your own free, secure, and easy-to-use bingo board for your clan or community event.
+The system uses a Google Sheet as a database and a Google Apps Script web app as the user-facing interface.
 
 ## **Part 1: Setting Up The Google Sheet**
 
@@ -23,17 +23,17 @@ You need to create three tabs at the bottom of the sheet. Rename them exactly as
 
 ### **Step 3: Populate the 'Config' Tab**
 
-This sheet controls the overall settings for your bingo board. Click and copy the following table into the sheet then update the settings as desired.
+This sheet controls the overall settings for your bingo board. Click and copy the following table into the sheet then update the settings as desired. **Note:** It is highly recommended to manage security settings (passwords, teams) and other configurations via the new **Board Setup** page after the initial setup.
 
 | A | B | C |
 | :---- | :---- | :---- |
 | **Setting** | **Value** | **Description** |
 | **General Settings** |  |  |
 | Page Title | Bingo Board | Page or board title. |
-| Admin Password | your\_secret\_password | Password to access the Admin Verification page. |
+| Admin Password | admin | Password to access the Admin Verification page. |
+| Team Names | Team 1, Team 2, Team 3, Team 4, Team 5, Team 6, Team 7 | Comma-separated list of each team name. |
+| Team Passwords | pass1, pass2, pass3, pass4, pass5, pass6, pass7 | Comma-separated list that corresponds exactly to your Team Names list. |
 | Max Page Width | 1400 | Sets the maximum width of the content in pixels (e.g., 1200). |
-| Team Names | Team 1, Team 2, Team 3 | Comma-separated list of each team name. |
-| Team Passwords | pass1, pass2, pass3 | Comma-separated list that corresponds exactly to your Team Names list. |
 | Evidence Field Label | Proof (Link, Screenshot Name, etc.) | Text description above the evidence field in the submission form. |
 | Unlock on Verified Only | FALSE | Sets if tiles are unlocked only after a prerequisite tile is verified by an admin (TRUE), or as soon as it's marked complete by a player (FALSE). |
 | Score on Verified Only | FALSE | Sets if points are awarded only after a tile is verified by an admin (TRUE), or as soon as it's marked complete by a player (FALSE). |
@@ -111,10 +111,15 @@ This sheet defines every tile on your board, copy the following table into the s
 | A | B | C | D | E | F | G | H | I | J | K |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
 | **TileID** | **Name** | **Description** | **Prerequisites** | **Top (%)** | **Left (%)** | **Width (%)** | **Height (%)** | **Points** | **Rotation** | **Overrides (JSON)** |
-| E1 | Tile 1 | Get x item |  | 10 | 5 | 15 | 15 | 10 | 0deg |  |
-| E2 | Tile 2 | Get y item | E1 | 25 | 5 | 15 | 15 | 10 | 15deg | {"Default Tile Shape": "Circle", "Tile Verified": "\#00FF00"} |
-| E3 | Tile 3 | Get z item |  | 40 | 5 | 15 | 15 | 10 | 0deg | {"Use Stamp by Default (Verified)": false} |
+| E1 | Tile 1 (No Prereq) | Get x item | | 10 | 5 | 15 | 15 | 10 | 0deg | {"Default Tile Shape": "Circle", "Tile Verified": "\#00FF00"} |
+| E2 | Tile 2 (Single Prereq) | Get y item | E1 | 25 | 5 | 15 | 15 | 10 | 0deg | {"Use Stamp by Default (Verified)": false} |
+| E3 | Tile 3 (Simple AND) | Get z item | E1,E2 | 40 | 5 | 15 | 15 | 15 | 0deg | |
+| E4 | Tile 4 (Simple OR) | Get a item | [["E1"],["E2"]] | 55 | 5 | 15 | 15 | 15 | 0deg | |
+| E5 | Tile 5 (Mixed AND/OR) | Get b item | [["E1","E2"],["E4"]] | 70 | 5 | 15 | 15 | 20 | 0deg | |
 
+*   **Prerequisites:** Defines which other tiles must be complete to unlock this one. Supports both simple and complex logic:
+    *   **Simple AND:** A comma-separated list of TileIDs (e.g., `E1,E2`). The tile unlocks if **both** E1 AND E2 are complete.
+    *   **Complex AND/OR:** For more advanced logic, use a JSON array of arrays (e.g., `[["E1","E2"],["E4"]]`). This means the tile unlocks if **(E1 AND E2) OR (E4)** is complete. Each inner array is an `AND` group, and the outer array `OR`s them together. The **Board Setup** page editor makes managing this easy.
 * **Rotation:** Sets the rotation of the entire tile. (e.g., 5deg, \-10deg). Defaults to 0deg.  
 * **Overrides (JSON):** A powerful feature to override any setting from the Config sheet for a single tile.  
   * Must be in valid JSON format: {"key": "value", "key2": "value2"}.  
@@ -128,11 +133,12 @@ This sheet will automatically log all player submissions. **You must add the `Co
 *   **CompletionTimestamp:** Automatically populated when a tile is first marked as "complete". This is used for the time-series chart on the Overview page.
 *   **Evidence Column:** This column stores submission evidence as a JSON string, which allows players to submit multiple pieces of evidence (each with a link and a name) for a single tile. For example: `[{"link":"https://...","name":"First proof"}]`.
 *   **Admin Verification:** Admins verify tiles by setting the “Admin Verified” value of a submission to “TRUE” in the Admin Page or directly in the sheet.
+*   **IsArchived:** Set to TRUE to ignore this submission entry across the entire application. This is useful for resolving duplicate entries via the Admin page.
 
 
-| A | B | C | D | E | F | G | H | I | J |
-| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
-| **Timestamp** | **CompletionTimestamp** | **Player Name** | **Team** | **TileID** | **Evidence** | **Notes** | **Admin Verified** | **IsComplete** | **RequiresAction** |
+| A | B | C | D | E | F | G | H | I | J | K |
+| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
+| **Timestamp** | **CompletionTimestamp** | **Player Name** | **Team** | **TileID** | **Evidence** | **Notes** | **Admin Verified** | **IsComplete** | **RequiresAction** | **IsArchived** |
 
 ## **Part 2: Setting Up The Google Apps Script**
 
@@ -145,9 +151,10 @@ This script connects your sheet to the web app.
 ### **Step 2: Create the Script Files**
 
 1. **Code.gs**: Delete any content inside and copy-paste the code from the Code.gs document provided.  
-2. **overview.html**: Click the + icon in the "Files" sidebar, select "HTML", name it `overview`, and copy-paste the code from the `overview.html` document provided.
-2. **index.html**: Delete any content inside and copy-paste the code from the index.html document provided.
-3. **admin.html**: Click the + icon in the "Files" sidebar, select "HTML", name it admin, and copy-paste the code from the admin.html document provided.
+2. **index.html**: Delete any content inside the default `index.html` file and copy-paste the code from the `index.html` document provided.
+3. **overview.html**: Click the `+` icon in the "Files" sidebar, select "HTML", name it `overview`, and copy-paste the code from the `overview.html` document provided.
+4. **admin.html**: Click the `+` icon in the "Files" sidebar, select "HTML", name it `admin`, and copy-paste the code from the `admin.html` document provided.
+5. **Setup.html**: Click the `+` icon in the "Files" sidebar, select "HTML", name it `Setup`, and copy-paste the code from the `Setup.html` document provided.
 
 ### **Step 3: Save and Deploy**
 
@@ -173,6 +180,26 @@ All pages contain a navigation bar at the top to easily switch between the Playe
 
 This page provides a public dashboard for the event, showing a leaderboard, a live feed of recent completions, and a chart of each team's score over time.
 
+### **Board Setup Page**
+
+This project includes a powerful **Board Setup** page that provides a graphical interface for editing the entire bingo board configuration. It is accessible from the main navigation bar.
+
+#### **Features**
+
+-   **Password Protected**: Access is restricted to users with the admin password.
+-   **Visual Tile Editor**: Drag, drop, and resize tiles directly on the board image.
+-   **Live Style Editor**: Modify global and tile-specific styles and see a live preview.
+-   **Team & Security Management**: Add or remove teams and change admin/team passwords.
+-   **Direct Google Sheet Sync**: Load and save all configurations directly to and from your Google Sheet.
+
+#### ⚠️ **Security Warning**
+
+The setup page provides full administrative control over the bingo board's configuration, including all tile data, styles, and passwords.
+
+**It is strongly recommended to remove the link to this page and/or the `Setup.html` file itself from your Google Apps Script project once the initial board setup is complete.**
+
+Leaving this page active in a live environment increases the risk of an unauthorized user gaining access and causing irreversible damage to your board data if they manage to guess the admin password.
+
 ### **Admin View**
 
 This is the recommended way for admins to manage submissions.
@@ -181,6 +208,9 @@ This is the recommended way for admins to manage submissions.
 *   Click on any row to open an edit modal and update the status checkboxes.
 
 **The Google Sheet (Manual Method)**
+*   Go to the Submissions tab in the Google Sheet.  
+*   Review the evidence. If it's valid, set the value in the Admin Verified column to TRUE.  
+*   If a submission needs changes, set RequiresAction to TRUE and add notes for the player in the Notes column.
 
 * Go to the Submissions tab in the Google Sheet.  
 * Review the evidence. If it's valid, set the value in the Admin Verified column to TRUE.  
@@ -196,19 +226,23 @@ To avoid accidentally breaking the board's configuration, it's highly recommende
 4. Click **Set permissions**.  
 5. Set to "can edit(with warning) **Done**.
 
-Repeat these steps for the **Tiles** sheet. Now, only you (the owner of the spreadsheet) can edit these two critical sheets, but other admins you've shared the sheet with can still view them and manage the Submissions sheet.
+Repeat these steps for the other sheets. Now you will be protected from accidental editing of the sheets that could break the app.
 
-### **Protecting Sheets**
+## Helper Tools
 
-To prevent other admins from accidentally breaking the board's configuration, it's highly recommended to protect the Config and Tiles sheets.
+### Tile Link Tool (`/tile_link_tool`)
 
-1. Click on the **Config** tab.  
-2. Click the small down-arrow on the tab itself, and select **Protect sheet**.  
-3. A sidebar will open. You can add a description like "Board Configuration \- Do Not Edit".  
-4. Click **Set permissions**.  
-5. By default, it will be set to "Only you". This is ideal. Click **Done**.
+To simplify the creation of board layouts, especially for events like tile races where multiple start paths are needed, a visual helper tool is included in the `tile_link_tool` directory. This tool allows you to visually link adjacent tiles and export the prerequisite data.
 
-Repeat these steps for the **Tiles** sheet. Now, only you (the owner of the spreadsheet) can edit these two critical sheets, but other admins you've shared the sheet with can still view them and manage the Submissions sheet.
+**Key Features:**
+
+-   Load tile positions from a CSV file.
+-   Display tiles over a background image of your board.
+-   Automatically link tiles based on distance.
+-   Manually add/remove links.
+-   Export a new CSV with a `Prerequisites` column formatted for simple `OR` logic (e.g., `[["TileA"], ["TileB"]]`).
+
+This is particularly useful for generating the initial `OR` conditions for starting tiles or for creating branching paths on the board. For detailed instructions, see the `README.md` inside the `tile_link_tool` directory.
 
 ## **Note on AI Generation**
 
