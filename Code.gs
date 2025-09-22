@@ -159,26 +159,54 @@ function getBoardData() {
  * @returns {Object|null} The submission details or null if none exist.
  */
 function getTileDetails(tileId, teamName) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const submissionsSheet = ss.getSheetByName('Submissions');
-    if (!submissionsSheet) return null;
-    const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
-    // Filter out archived submissions
-    const submissions = allSubmissions.filter(s => s.IsArchived !== true);
-    
-    const sub = submissions.slice().reverse().find(s => s['TileID'] === tileId && s['Team'] === teamName);
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const submissionsSheet = ss.getSheetByName('Submissions');
+        if (!submissionsSheet || submissionsSheet.getLastRow() < 2) return null; // No data to search
 
-    if (sub) {
-      return {
-        playerName: sub['Player Name'], evidence: sub['Evidence'], notes: sub['Notes'],
-        isComplete: sub['IsComplete'] === true, requiresAction: sub['RequiresAction'] === true
-      };
+        // Get all values once. This is the main read operation.
+        const allValues = submissionsSheet.getDataRange().getValues();
+        const headers = allValues.shift(); // Remove header row
+
+        // Create a map of header names to their column index for robust access
+        const headerMap = headers.reduce((acc, header, i) => {
+            acc[header] = i;
+            return acc;
+        }, {});
+
+        // Get column indices
+        const tileIdCol = headerMap['TileID'];
+        const teamCol = headerMap['Team'];
+        const isArchivedCol = headerMap['IsArchived'];
+
+        // Loop backwards through the values. This is much faster than array manipulation.
+        for (let i = allValues.length - 1; i >= 0; i--) {
+            const row = allValues[i];
+
+            // Check if the current row matches the criteria
+            if (row[tileIdCol] === tileId && row[teamCol] === teamName) {
+                // If it matches, check if it's archived. If so, skip it.
+                if (isArchivedCol !== undefined && row[isArchivedCol] === true) {
+                    continue;
+                }
+
+                // Found the latest, non-archived submission. Return its details.
+                return {
+                    playerName: row[headerMap['Player Name']],
+                    evidence: row[headerMap['Evidence']],
+                    notes: row[headerMap['Notes']],
+                    isComplete: row[headerMap['IsComplete']] === true,
+                    requiresAction: row[headerMap['RequiresAction']] === true
+                };
+            }
+        }
+
+        return null; // No matching submission found
+    } catch (e) {
+        Logger.log(`Error in getTileDetails: ${e.message}`);
+        // Return an object with an error property for the client-side to handle
+        return { error: 'Failed to get tile details: ' + e.message };
     }
-    return null;
-  } catch(e) {
-    return { error: 'Failed to get tile details: ' + e.message };
-  }
 }
 
 /**
@@ -196,13 +224,13 @@ function getLatestTeamData() {
       return { error: "Required sheet not found." };
     }
 
-    const { data: tileObjects } = getSheetDataAsObjects(tilesSheet);
+    const { data: tileObjects, headers: tileHeaders } = getSheetDataAsObjects(tilesSheet);
     const tilePointsMap = tileObjects.reduce((acc, row) => {
         if (row['TileID']) acc[row['TileID']] = parseInt(row['Points']) || 0;
         return acc;
     }, {});
 
-    const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
+    const { data: allSubmissions, headers: subHeaders } = getSheetDataAsObjects(submissionsSheet);
     // Filter out archived submissions from all calculations
     const submissions = allSubmissions.filter(s => s.IsArchived !== true);
     const teamNamesList = String(config['Team Names'] || '').split(',').map(t => t.trim());
@@ -247,7 +275,13 @@ function getLatestTeamData() {
                                 .map(([team, data]) => ({ team: team, score: data.scores }))
                                 .sort((a, b) => b.score - a.score);
 
-    return { teamData, scoreboard: scoreboardData };
+    return { 
+      teamData, 
+      scoreboard: scoreboardData,
+      // Pass along the data we already fetched so other functions can reuse it
+      submissions,
+      tileObjects
+    };
   } catch (e) {
     Logger.log(e.stack);
     return { error: e.message };
@@ -270,26 +304,30 @@ function submitOrUpdateTile(submissionData) {
     }
 
     const submissionsSheet = ss.getSheetByName('Submissions');
-    const { list: headers, map: headerMap } = getHeaders(submissionsSheet);
-    const submissions = submissionsSheet.getDataRange().getValues();
-    let rowIndex = -1;
-    const isArchivedColIndex = headerMap['IsArchived'] ? headerMap['IsArchived'] - 1 : -1;
+    const allValues = submissionsSheet.getDataRange().getValues();
+    const headers = allValues.shift(); // Get and remove header row
+    const headerMap = headers.reduce((acc, header, i) => { acc[header] = i; return acc; }, {});
+    const dataRows = allValues; // dataRows is now just the data
 
-    const teamColIndex = headerMap['Team'] - 1;
-    const tileIdColIndex = headerMap['TileID'] - 1;
+    let rowIndex = -1;
+    const isArchivedColIndex = headerMap['IsArchived'];
+    const teamColIndex = headerMap['Team'];
+    const tileIdColIndex = headerMap['TileID'];
 
     let existingRowValues = null;
     let existingIsComplete = false;
-    const completionTimestampColIndex = headerMap['CompletionTimestamp'] ? headerMap['CompletionTimestamp'] - 1 : -1;
+    const completionTimestampColIndex = headerMap['CompletionTimestamp'];
+    const isCompleteColIndex = headerMap['IsComplete'];
 
     // Search backwards for the most recent entry
-    for (let i = submissions.length - 1; i >= 1; i--) {
+    for (let i = dataRows.length - 1; i >= 0; i--) {
       // Player cannot update an archived submission
-      if (isArchivedColIndex !== -1 && submissions[i][isArchivedColIndex] === true) continue;
-      if (submissions[i][teamColIndex] === submissionData.team && submissions[i][tileIdColIndex] === submissionData.tileId) {
-        rowIndex = i + 1;
-        existingRowValues = submissions[i];
-        existingIsComplete = existingRowValues[headerMap['IsComplete'] - 1] === true;
+      const row = dataRows[i];
+      if (isArchivedColIndex !== undefined && row[isArchivedColIndex] === true) continue;
+      if (row[teamColIndex] === submissionData.team && row[tileIdColIndex] === submissionData.tileId) {
+        rowIndex = i + 2; // +1 for 1-based index, +1 for shifted header
+        existingRowValues = row;
+        existingIsComplete = existingRowValues[isCompleteColIndex] === true;
         break;
       }
     }
@@ -305,7 +343,7 @@ function submitOrUpdateTile(submissionData) {
                     return ''; // Transitioning away from complete
                 } else {
                     // No change in completion status, keep old value or set initial
-                    return existingRowValues && completionTimestampColIndex !== -1 ? existingRowValues[completionTimestampColIndex] : (isNowComplete ? new Date() : '');
+                    return existingRowValues && completionTimestampColIndex !== undefined ? existingRowValues[completionTimestampColIndex] : (isNowComplete ? new Date() : '');
                 }
             case 'Player Name': return submissionData.playerName;
             case 'Team': return submissionData.team;
@@ -366,19 +404,20 @@ function getAdminData(password) {
       return { success: false, message: "Could not find 'Submissions' or 'Tiles' sheet." };
     }
 
-    // Get Submissions
-    const subHeaders = submissionsSheet.getRange(1, 1, 1, submissionsSheet.getLastColumn()).getValues()[0];
-    const subData = submissionsSheet.getLastRow() > 1 ? submissionsSheet.getRange(2, 1, submissionsSheet.getLastRow() - 1, submissionsSheet.getLastColumn()).getValues() : [];
-
-    const submissions = subData.map(row => {
-      const submissionObject = {};
-      subHeaders.forEach((header, i) => {
-        if (row[i] instanceof Date) {
-          submissionObject[header] = row[i].toISOString();
-        } else {
-          submissionObject[header] = row[i];
+    // Get Submissions using the helper for a single, efficient read
+    const { data: submissionsData } = getSheetDataAsObjects(submissionsSheet);
+    const submissions = submissionsData.map(row => {
+      // The row from getSheetDataAsObjects is already an object.
+      // We just need to iterate its keys and convert any Date objects to ISO strings for transport.
+      const submissionObject = { ...row }; // Make a mutable copy
+      for (const key in submissionObject) {
+        if (Object.prototype.hasOwnProperty.call(submissionObject, key)) {
+          const value = submissionObject[key];
+          if (value instanceof Date) {
+            submissionObject[key] = value.toISOString();
+          }
         }
-      });
+      }
       return submissionObject;
     });
 
@@ -433,23 +472,12 @@ function getOverviewData() {
         // --- Get latest data for scores and states ---
         const latestData = getLatestTeamData();
         if (latestData.error) return latestData;
+        const { submissions, tileObjects } = latestData; // Reuse data fetched by getLatestTeamData
 
         // --- Process for Leaderboard ---
         const scoreOnVerifiedOnlyForLeaderboard = config['Score on Verified Only'] !== false;
-        const leaderboard = latestData.scoreboard.map(item => {
-            const teamName = item.team;
-            const teamStates = latestData.teamData[teamName].tileStates;
-            const completedTiles = Object.values(teamStates).filter(state => {
-                return scoreOnVerifiedOnlyForLeaderboard ? state.verified : state.complete;
-            }).length;
-            return { team: teamName, score: item.score, completedTiles: completedTiles };
-        });
+        const leaderboard = latestData.scoreboard; // Scoreboard data is now sufficient
 
-        // --- Process for Feed & Chart ---
-        const { data: allSubmissions } = getSheetDataAsObjects(submissionsSheet);
-        const submissions = allSubmissions.filter(s => s.IsArchived !== true);
-
-        const { data: tileObjects } = getSheetDataAsObjects(tilesSheet);
         const tileInfoMap = tileObjects.reduce((acc, row) => {
             if (row['TileID']) {
                 acc[row['TileID']] = {
@@ -537,20 +565,23 @@ function updateSubmissionStatus(updateData) {
     const submissions = submissionsSheet.getDataRange().getValues();
     let rowIndex = -1;
 
-    const timestampColIndex = headerMap['Timestamp'] - 1;
-    const teamColIndex = headerMap['Team'] - 1;
-    const tileIdColIndex = headerMap['TileID'] - 1;
+    const timestampCol = headerMap['Timestamp'] - 1;
+    const teamCol = headerMap['Team'] - 1;
+    const tileIdCol = headerMap['TileID'] - 1;
+    const isCompleteCol = headerMap['IsComplete'] - 1;
 
     let oldIsComplete = false;
+    let rowToUpdate = null;
 
     // Search backwards to find the exact submission by timestamp, team, and tileId
     for (let i = submissions.length - 1; i >= 1; i--) {
-      const rowTimestamp = new Date(submissions[i][timestampColIndex]).toISOString();
-      const rowTeam = submissions[i][teamColIndex];
-      const rowTileId = submissions[i][tileIdColIndex];
+      const rowTimestamp = new Date(submissions[i][timestampCol]).toISOString();
+      const rowTeam = submissions[i][teamCol];
+      const rowTileId = submissions[i][tileIdCol];
       if (rowTimestamp === updateData.timestamp && rowTeam === updateData.team && rowTileId === updateData.tileId) {
         rowIndex = i + 1;
-        oldIsComplete = submissions[i][headerMap['IsComplete'] - 1] === true;
+        rowToUpdate = submissions[i];
+        oldIsComplete = rowToUpdate[isCompleteCol] === true;
         break;
       }
     }
@@ -558,21 +589,25 @@ function updateSubmissionStatus(updateData) {
     if (rowIndex === -1) {
       return { success: false, message: 'Could not find the submission to update. It may have been modified.' };
     }
-    
+
     const newIsComplete = updateData.isComplete;
 
-    // Update the correct columns based on the sheet structure
-    submissionsSheet.getRange(rowIndex, headerMap['Notes']).setValue(updateData.notes);
-    submissionsSheet.getRange(rowIndex, headerMap['Admin Verified']).setValue(updateData.adminVerified);
-    submissionsSheet.getRange(rowIndex, headerMap['IsComplete']).setValue(newIsComplete);
-    submissionsSheet.getRange(rowIndex, headerMap['RequiresAction']).setValue(updateData.requiresAction);
-    
-    // NEW: Update CompletionTimestamp based on change in 'IsComplete' status
-    if (headerMap['CompletionTimestamp']) {
-        if (newIsComplete && !oldIsComplete) { submissionsSheet.getRange(rowIndex, headerMap['CompletionTimestamp']).setValue(new Date()); }
-        else if (!newIsComplete && oldIsComplete) { submissionsSheet.getRange(rowIndex, headerMap['CompletionTimestamp']).setValue(''); }
+    // Update the row data in the JavaScript array
+    rowToUpdate[headerMap['Notes'] - 1] = updateData.notes;
+    rowToUpdate[headerMap['Admin Verified'] - 1] = updateData.adminVerified;
+    rowToUpdate[headerMap['IsComplete'] - 1] = newIsComplete;
+    rowToUpdate[headerMap['RequiresAction'] - 1] = updateData.requiresAction;
+
+    // Update CompletionTimestamp based on change in 'IsComplete' status
+    const completionTimestampCol = headerMap['CompletionTimestamp'];
+    if (completionTimestampCol) {
+        if (newIsComplete && !oldIsComplete) { rowToUpdate[completionTimestampCol - 1] = new Date(); }
+        else if (!newIsComplete && oldIsComplete) { rowToUpdate[completionTimestampCol - 1] = ''; }
     }
-    
+
+    // Write the entire updated row back in a single call
+    submissionsSheet.getRange(rowIndex, 1, 1, rowToUpdate.length).setValues([rowToUpdate]);
+
     return { success: true, message: 'Submission updated!' };
   } catch (error) {
     Logger.log(`Error in updateSubmissionStatus after password verification: ${error.stack}`);
@@ -740,24 +775,40 @@ function saveSetupPageData(payload) {
     newConfig['Team Names'] = newTeamNames.join(',');
     newConfig['Team Passwords'] = newTeamPasswords.join(',');
 
-    // --- Safer Update for Config Sheet ---
-    // This method avoids clearing the sheet, preserving other columns and key order.
+    // --- Efficient Update for Config Sheet ---
+    // This method reads all values, updates them in JS, and writes them back in one call.
     const lastRow = configSheet.getLastRow();
-    const sheetKeys = lastRow > 0 ? configSheet.getRange(1, 1, lastRow, 1).getValues().flat() : [];
-    const keysToAppend = [];
+    if (lastRow === 0) { // Sheet is empty, just write everything
+      const allNewValues = Object.entries(newConfig);
+      if (allNewValues.length > 0) {
+        configSheet.getRange(1, 1, allNewValues.length, 2).setValues(allNewValues);
+      }
+      return 'Success';
+    }
 
+    const range = configSheet.getRange(1, 1, lastRow, 2);
+    const values = range.getValues();
+    const keysToAppend = [];
+    const handledKeys = new Set();
+
+    // Update existing values in place
+    for (const row of values) {
+      const key = row[0];
+      if (key in newConfig) {
+        row[1] = newConfig[key];
+        handledKeys.add(key);
+      }
+    }
+    range.setValues(values); // First bulk write
+
+    // Find keys that were not in the sheet and need to be appended
     for (const key in newConfig) {
-      const rowIndex = sheetKeys.indexOf(key);
-      if (rowIndex !== -1) {
-        // Key exists, update its value in column B
-        configSheet.getRange(rowIndex + 1, 2).setValue(newConfig[key]);
-      } else {
-        // Key is new, add it to a list to be appended at the end
+      if (!handledKeys.has(key)) {
         keysToAppend.push([key, newConfig[key]]);
       }
     }
     if (keysToAppend.length > 0) {
-      configSheet.getRange(lastRow + 1, 1, keysToAppend.length, 2).setValues(keysToAppend);
+      configSheet.getRange(lastRow + 1, 1, keysToAppend.length, 2).setValues(keysToAppend); // Second bulk write
     }
 
     return 'Success';
