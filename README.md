@@ -1,4 +1,7 @@
 # BIngo-Interactive-Score-Sheet
+
+> **Note on Project Status:** This project is in a working condition and is relatively easy to set up for simple bingo events. However, it has not been heavily tested and development has effectively moved to a more robust, feature-rich platform using Firebase. For new projects, it is highly recommended to use the new version available at: **[Firebase-Bingo-Platform](https://github.com/Bourkies/Firebase-Bingo-Platform.git)**.
+
 A basic interactive template for bingo competitions using Google Web Apps and Google Sheets.
 
 Welcome to the Interactive Bingo Score Sheet! This guide provides everything you need to set up your own free, secure, and easy-to-use bingo board for your clan or community event.
