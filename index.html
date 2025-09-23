@@ -267,7 +267,17 @@
     // Function to handle refresh button click
     function refreshData() {
       showGlobalLoader();
-      pollForUpdates();
+      // Use the new robust refresh function
+      refreshBoardState(
+        () => { // onSuccess
+            hideGlobalLoader();
+            showMessage('Board updated!', false);
+        },
+        (err) => { // onFailure
+            hideGlobalLoader();
+            showMessage('Refresh failed: ' + err.message, true);
+        }
+      );
     }
 
     function fetchInitialData() {
@@ -299,26 +309,32 @@
         .finally(() => hideGlobalLoader());
     }
 
-    function pollForUpdates() {
-      google.script.run
+    /**
+     * A robust function to fetch the latest team data and update the UI.
+     * It uses callbacks to avoid issues with google.script.run's handler overwriting.
+     * @param {function} [onSuccess] - Optional callback to run on success.
+     * @param {function} [onFailure] - Optional callback to run on failure.
+     */
+    function refreshBoardState(onSuccess, onFailure) {
+        google.script.run
         .withSuccessHandler(updateData => {
-          hideGlobalLoader(); // Hide loader from the calling function (e.g., refreshData)
-          if (updateData && !updateData.error) { // Don't hide loader on error, let finally do it
-            boardDataCache.teamData = updateData.teamData;
-            boardDataCache.scoreboard = updateData.scoreboard;
+          if (updateData && !updateData.error) {
+            // Replace the entire cache with the fresh data from the server.
+            boardDataCache = updateData;
             renderBoard();
             renderScoreboard();
+            if (onSuccess) onSuccess(updateData);
           } else if (updateData && updateData.error) {
-            console.error('Server returned an error during polling:', updateData.error);
-            showMessage('Refresh failed: ' + updateData.error, true);
+            const error = new Error(updateData.error);
+            console.error('Server returned an error during refresh:', error);
+            if (onFailure) onFailure(error);
           }
         })
         .withFailureHandler(error => {
-            hideGlobalLoader(); // Hide loader from the calling function
-            console.error('Polling request failed:', error.message);
-            showMessage('Refresh failed: ' + error.message, true);
+            console.error('Refresh request failed:', error.message);
+            if (onFailure) onFailure(error);
         })
-        .getLatestTeamData();
+        .getBoardData();
     }
     
     function applyGlobalStyles(config) {
@@ -608,46 +624,78 @@
     }
 
     function openModal(tile, status) {
-      document.getElementById('submission-form').reset();
+      // --- 1. Show the modal immediately with a loading state ---
+      const modal = document.getElementById('submission-modal');
+      const form = document.getElementById('submission-form');
+      form.reset(); // Reset form fields from previous use
+
+      // Populate static info you already have
       document.getElementById('modal-tile-id').value = tile.id;
-      // --- UPDATED: Set Tile ID and Name in the new format ---
       document.getElementById('modal-tile-name').textContent = `${tile.id}: ${tile.name}`;
       document.getElementById('modal-team-name').textContent = `Team: ${currentTeam}`;
       document.getElementById('modal-tile-desc').textContent = tile.description;
 
-      const isEditable = status !== 'Verified';
+      // Set a loading state on all form elements
       const formElements = document.querySelectorAll('#submission-form input, #submission-form textarea, #submission-form button');
-      formElements.forEach(el => el.disabled = !isEditable);
-      document.getElementById('submit-button').textContent = isEditable ? 'Save Progress' : 'Verified (Locked)';
+      const submitButton = document.getElementById('submit-button');
+      formElements.forEach(el => el.disabled = true);
+      submitButton.textContent = 'Loading...';
+      
+      clearEvidenceInputs(); // Clear previous dynamic fields
+      document.getElementById('player-name').placeholder = "Loading...";
+      document.getElementById('notes').placeholder = "Loading...";
 
-      // Clear previous dynamic fields
-      clearEvidenceInputs();
+      modal.style.display = 'flex'; // Display the modal now!
 
+      const isEditable = status !== 'Verified';
+
+      // --- 2. Fetch data in the background (for both editable and non-editable tiles) ---
       google.script.run
         .withSuccessHandler(details => {
-          if (details) {
-            document.getElementById('player-name').value = details.playerName || '';
-            document.getElementById('notes').value = details.notes || '';
-            document.getElementById('mark-as-complete').checked = details.isComplete;
-            document.getElementById('requires-action').checked = details.requiresAction;
+            // --- 3. Populate the form when data arrives ---
+            document.getElementById('player-name').placeholder = ""; // Clear placeholder
+            document.getElementById('notes').placeholder = "";
 
-            // Populate evidence fields
-            let evidenceData = [];
-            try {
-                evidenceData = JSON.parse(details.evidence);
-                if (!Array.isArray(evidenceData)) throw new Error("Not an array");
-            } catch (e) {
-                // Handle old plain text evidence for backward compatibility
-                if (details.evidence) evidenceData = [{ link: details.evidence, name: '' }];
+            if (details) {
+                document.getElementById('player-name').value = details.playerName || '';
+                document.getElementById('notes').value = details.notes || '';
+                document.getElementById('mark-as-complete').checked = details.isComplete;
+                document.getElementById('requires-action').checked = details.requiresAction;
+
+                let evidenceData = [];
+                try {
+                    evidenceData = JSON.parse(details.evidence);
+                    if (!Array.isArray(evidenceData)) throw new Error("Not an array");
+                } catch (e) {
+                    // Handle old plain text evidence for backward compatibility
+                    if (details.evidence) evidenceData = [{ link: details.evidence, name: '' }];
+                }
+                
+                if (evidenceData.length > 0 && (evidenceData[0].link || evidenceData[0].name)) {
+                    evidenceData.forEach(item => addEvidenceInput(item.link, item.name));
+                } else {
+                    // If no details or no evidence, ensure at least one empty evidence input is there for editable tiles
+                    if (isEditable) addEvidenceInput();
+                }
+            } else {
+                 // If no details, ensure at least one empty evidence input is there for editable tiles
+                 if (isEditable) addEvidenceInput();
             }
             
-            if (evidenceData.length > 0) {
-                evidenceData.forEach(item => addEvidenceInput(item.link, item.name));
+            // --- 4. Set final form state based on editability ---
+            if (isEditable) {
+                // Re-enable form for editing
+                formElements.forEach(el => el.disabled = false);
+                submitButton.textContent = 'Save Progress';
             } else {
-                addEvidenceInput(); // Start with one empty item if no evidence exists
+                // Keep form disabled for verified tiles
+                submitButton.textContent = 'Verified (Locked)';
             }
-          }
-          document.getElementById('submission-modal').style.display = 'flex';
+        })
+        .withFailureHandler(err => {
+            // Handle error - show an error message and close the modal
+            showMessage('Could not load tile details: ' + err.message, true);
+            closeModal();
         })
         .getTileDetails(tile.id, currentTeam);
     }
@@ -686,11 +734,19 @@
       google.script.run
         .withSuccessHandler(response => {
           if (response && response.success) { // On successful submission
-            hideGlobalLoader(); // Hide the loader from this submission action
+            // The submission was successful. Close the modal and hide the main loader.
+            // The board refresh will happen in the background.
+            hideGlobalLoader();
             showMessage(response.message, false);
-            pollForUpdates(); // This is a fire-and-forget refresh, it will manage its own loader state internally
-            clearEvidenceInputs();
             closeModal();
+
+            // Trigger the board refresh.
+            refreshBoardState(
+                null, // No special action on success, the board just updates.
+                (err) => { showMessage('Background refresh failed: ' + err.message, true); }
+            );
+
+            clearEvidenceInputs();
           } else { // On submission failure (e.g., wrong password)
             hideGlobalLoader();
             submitButton.disabled = false; // Re-enable the button to allow another attempt
